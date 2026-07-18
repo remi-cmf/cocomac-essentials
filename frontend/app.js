@@ -715,12 +715,29 @@ function bind() {
   $('#productCategory').onchange = updateProductIdPreview;
   bindImageUpload();
 
-  $('#settingsBtn').onclick = () => {
+const settingsBtn = $('#settingsBtn');
+
+if (settingsBtn) {
+  settingsBtn.onclick = () => {
     const currentSettings = settings();
-    $('#apiUrl').value = currentSettings.apiUrl;
-    $('#cloudMode').checked = currentSettings.cloudMode;
-    $('#settingsDialog').showModal();
+
+    const apiUrlInput = $('#apiUrl');
+    const cloudModeInput = $('#cloudMode');
+    const settingsDialog = $('#settingsDialog');
+
+    if (apiUrlInput) {
+      apiUrlInput.value = currentSettings.apiUrl || '';
+    }
+
+    if (cloudModeInput) {
+      cloudModeInput.checked = !!currentSettings.cloudMode;
+    }
+
+    if (settingsDialog) {
+      settingsDialog.showModal();
+    }
   };
+}
 
   $('#scanBtn').onclick = () => $('#scanDialog').showModal();
 
