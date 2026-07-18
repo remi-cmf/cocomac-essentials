@@ -32,7 +32,7 @@
         <button type="button" class="menu-nav" data-page="calendarPage">Kalender</button>
         <button type="button" class="menu-nav" data-page="adminPage">Administration</button>
         <hr>
-        <button type="button" id="menuSettingsBtn">Einstellungen</button>
+        <button type="button" id="menuSettingsBtn">Verbindung</button>
       </div>
     </div>
   </header>
@@ -88,9 +88,14 @@
     <section id="adminPage" class="app-page hidden">
       <div class="page-heading">
         <div><small>COCOMAC ESSENTIAL</small><h2>Administration</h2></div>
-        <div class="admin-heading-actions"><button id="syncDriveImagesBtn" type="button" class="ghost">Bilder aus Drive zuordnen</button><button id="adminAddProductBtn" type="button">+ Neues Produkt</button></div>
+        <div class="admin-heading-actions"><button id="adminLogoutBtn" type="button" class="ghost">Abmelden</button><button id="syncDriveImagesBtn" type="button" class="ghost">Bilder aus Drive zuordnen</button><button id="adminAddProductBtn" type="button">+ Neues Produkt</button></div>
       </div>
       <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
+      <section class="admin-section">
+        <h3>Projekte verwalten</h3>
+        <p class="field-help">Projekte können ausschließlich hier gelöscht werden.</p>
+        <div id="adminProjectList" class="admin-product-list"></div>
+      </section>
       <section class="admin-section">
         <h3>Produkte verwalten</h3>
         <div id="adminProductList" class="admin-product-list"></div>
@@ -158,7 +163,7 @@
     </div>
   </dialog>
 
-  <!-- Projektbezogene Aktionen -->
+  <!-- Equipment-Aktionen -->
   <dialog id="actionDialog" class="reservation-dialog">
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="actionForm">
@@ -167,20 +172,61 @@
       <p id="actionHelp" class="dialog-intro"></p>
       <input type="hidden" id="actionArticleId">
       <input type="hidden" id="actionType">
-      <label>Projekt<select id="actionProject" required></select></label>
-      <div id="actionProjectInfo" class="reservation-project-info"></div>
-      <div class="form-grid two-columns">
-        <label>Von<input id="actionFrom" type="date" required></label>
-        <label>Bis<input id="actionTo" type="date" required></label>
+
+      <div id="standardActionFields">
+        <label>Projekt<select id="actionProject"></select></label>
+        <div id="actionProjectInfo" class="reservation-project-info"></div>
+        <div class="form-grid two-columns">
+          <label>Von<input id="actionFrom" type="date"></label>
+          <label>Bis<input id="actionTo" type="date"></label>
+        </div>
+        <div id="actionAvailability" class="reservation-availability"></div>
       </div>
-      <div id="actionAvailability" class="reservation-availability"></div>
-      <label>Menge<input id="quantity" type="number" min="1" value="1" required></label>
-      <label>Notiz<textarea id="note" placeholder="Optional"></textarea></label>
+
+      <div id="damageFields" hidden>
+        <div id="damageProductInfo" class="reservation-availability"></div>
+        <div class="form-grid two-columns">
+          <label>Schadensdatum<input id="damageDate" type="date"></label>
+          <label>Menge<input id="damageQuantity" type="number" min="1" value="1"></label>
+        </div>
+        <div id="damageProjectSuggestion" class="reservation-project-info"></div>
+        <fieldset class="damage-project-choice">
+          <legend>Gehört der Schaden zu diesem Projekt?</legend>
+          <label class="radio-row"><input type="radio" name="damageProjectChoice" value="yes"> Ja, dem Projekt zuordnen und berechnen</label>
+          <label class="radio-row"><input type="radio" name="damageProjectChoice" value="no" checked> Nein, interner Schaden von Cocomac</label>
+        </fieldset>
+        <input type="hidden" id="damageSuggestedProjectId">
+        <label>Schaden, Verlust oder Diebstahl beschreiben
+          <textarea id="damageDescription" required placeholder="Zum Beispiel: Beim Transport gebrochen, verloren, gestohlen oder reparierbar …"></textarea>
+        </label>
+        <div class="form-grid two-columns">
+          <label>Wert pro Stück in €<input id="damageUnitValue" type="number" min="0" step="0.01"></label>
+          <label>Gesamtwert<div id="damageTotalValue" class="generated-number">0,00 €</div></label>
+        </div>
+        <p class="field-help">Bei Projektzuordnung wird dieser Gesamtwert als Schadenkosten im Projektbeleg aufgeführt.</p>
+      </div>
+
+      <div id="standardQuantityField"><label>Menge<input id="quantity" type="number" min="1" value="1"></label></div>
+      <div id="standardNoteField"><label>Notiz<textarea id="note" placeholder="Optional"></textarea></label></div>
       <button id="actionSubmitBtn" type="submit">Speichern</button>
     </form>
   </dialog>
 
-  <!-- Einstellungen -->
+  <!-- Administrator-Anmeldung -->
+  <dialog id="adminLoginDialog" class="admin-login-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="adminLoginForm">
+      <small>COCOMAC ESSENTIAL</small>
+      <h2>Administration</h2>
+      <p>Dieser Bereich ist geschützt. Bitte melde dich an.</p>
+      <label>Benutzername<input id="adminUsername" type="text" autocomplete="username" required></label>
+      <label>Passwort<input id="adminPassword" type="password" autocomplete="current-password" required></label>
+      <button id="adminLoginSubmitBtn" type="submit">Anmelden</button>
+      <div id="adminLoginError" class="login-error" hidden></div>
+    </form>
+  </dialog>
+
+  <!-- Verbindung -->
   <dialog id="settingsDialog">
     <button
       type="button"
@@ -404,6 +450,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=21" type="module"></script>
+  <script src="./app.js?v=22" type="module"></script>
 </body>
 </html>

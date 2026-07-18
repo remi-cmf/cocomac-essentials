@@ -169,3 +169,19 @@ textarea { resize: vertical; }
   .form-columns { grid-template-columns: minmax(0,1fr); }
   .product-dialog button, .product-dialog .actions { max-inline-size: 100%; }
 }
+
+/* V6 Schadenserfassung */
+.damage-project-choice{border:1px solid var(--line,#d8d4ca);border-radius:16px;padding:14px;margin:14px 0;min-width:0}
+.damage-project-choice legend{font-weight:800;padding:0 6px}
+.radio-row{display:flex!important;align-items:flex-start;gap:10px;margin:10px 0;min-width:0}
+.radio-row input{width:auto!important;min-width:auto!important;flex:0 0 auto;margin-top:3px}
+#damageFields,#standardActionFields{min-width:0;max-width:100%}
+
+
+/* V6.1 geschützte Administration */
+.admin-login-dialog{inline-size:min(520px,calc(100vw - 20px))}
+.admin-login-dialog form{display:grid;gap:14px}
+.login-error{padding:12px 14px;border-radius:14px;background:#f8e2df;color:#8a241b;font-weight:700}
+.admin-project-icon{display:grid;place-items:center;width:64px;height:64px;border-radius:16px;background:#171716;color:#fff;font-weight:900;letter-spacing:.08em}
+.admin-project-row{grid-template-columns:72px minmax(0,1fr) auto}
+@media(max-width:700px){.admin-project-row{grid-template-columns:54px minmax(0,1fr)}.admin-project-icon{width:48px;height:48px;border-radius:12px;font-size:.78rem}.admin-project-row .admin-row-actions{grid-column:1/-1;justify-content:stretch}.admin-project-row .admin-row-actions button{flex:1}}

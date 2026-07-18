@@ -3,6 +3,7 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 
 const LOCAL_KEY = 'cocomac-essential-state-v1';
 const SETTINGS_KEY = 'cocomac-essential-settings-v1';
+const ADMIN_TOKEN_KEY = 'cocomac-essential-admin-token-v1';
 const LOCAL_PRODUCTS_KEY = 'cocomac-essential-products-v1';
 const LOCAL_PROJECTS_KEY = 'cocomac-essential-projects-v1';
 const LOCAL_RESERVATIONS_KEY = 'cocomac-essential-reservations-v1';
@@ -22,6 +23,7 @@ let selectedProductImage = null;
 let imageLibrary = [];
 let projects = [];
 let reservations = [];
+let damages = [];
 let activeProjectId = null;
 let reservationOrigin = 'project';
 let cloudSyncTimer = null;
@@ -85,6 +87,7 @@ async function refreshCatalog() {
   catalog = (snapshot.products || []).map(normalizeProduct);
   projects = (snapshot.projects || []).map(normalizeProject).sort((a,b) => String(b.start).localeCompare(String(a.start)));
   reservations = (snapshot.reservations || []).map(normalizeReservation);
+  damages = Array.isArray(snapshot.damages) ? snapshot.damages.map(normalizeDamage) : [];
   imageLibrary = Array.isArray(snapshot.images) ? snapshot.images : [];
   applyLocalDriveImageMatches();
 
@@ -209,7 +212,7 @@ function applyLocalDriveImageMatches() {
 
 async function automaticDriveImageSync() {
   try {
-    const result = await sendCloudJsonpAction('syncProductImages', {});
+    const result = await sendCloudJsonpAction('syncProductImages', adminPayload());
     if (Number(result?.assigned || 0) > 0) {
       await syncFromCloud({ force: true });
     }
@@ -287,6 +290,7 @@ function render() {
   $('#syncBanner').textContent = 'Synchronisierung aktiv: Änderungen werden über Google Sheets auf allen Geräten übernommen.';
   $('#syncBanner').classList.remove('demo');
   renderProjects();
+  if (!$('#adminPage')?.classList.contains('hidden')) { renderAdminProjects(); renderAdminProducts(); }
   renderCalendar();
   renderAdminProducts();
 }
@@ -400,6 +404,28 @@ function printQr(item) {
   printWindow.document.close();
 }
 
+function latestProjectForProduct(productId) {
+  const rows = reservations
+    .filter(r => r.productId === productId && r.projectId && r.projectId !== 'COCOMAC-INTERN')
+    .sort((a, b) => String(b.to || b.from).localeCompare(String(a.to || a.from)));
+  for (const row of rows) {
+    const project = projects.find(p => p.id === row.projectId);
+    if (project) return project;
+  }
+  return null;
+}
+
+function projectOrInternal(projectId) {
+  if (projectId === 'COCOMAC-INTERN') return { id:'COCOMAC-INTERN', name:'Cocomac intern', status:'Interner Bestand', start:'', end:'', contact:'Cocomac Film GmbH' };
+  return projects.find(p => p.id === projectId);
+}
+
+function updateDamageTotal() {
+  const quantity = Math.max(0, Number($('#damageQuantity')?.value || 0));
+  const unitValue = Math.max(0, Number($('#damageUnitValue')?.value || 0));
+  if ($('#damageTotalValue')) $('#damageTotalValue').textContent = euro(quantity * unitValue);
+}
+
 function openAction(id, action) {
   const item = catalog.find(product => product.id === id);
   if (!item) return toast('Artikel nicht gefunden.');
@@ -408,20 +434,52 @@ function openAction(id, action) {
   $('#actionArticleId').value = id;
   $('#actionType').value = action;
   $('#actionTitle').textContent = {
-    checkout: 'Ausleihen', return: 'Zurückgeben', defect: 'Defekt melden', release: 'Defekt freigeben'
+    checkout: 'Ausleihen', return: 'Zurückgeben', defect: 'Schaden melden', release: 'Defekt freigeben'
   }[action] || 'Buchung';
+
+  const isDamage = action === 'defect';
+  $('#damageFields').hidden = !isDamage;
+  $('#standardActionFields').hidden = isDamage;
+  $('#standardQuantityField').hidden = isDamage;
+  $('#standardNoteField').hidden = isDamage;
+
+  if (isDamage) {
+    const latestProject = latestProjectForProduct(id);
+    const unitValue = Number(item.replacementValue || item.purchasePrice || 0);
+    $('#damageDate').value = todayIso();
+    $('#damageQuantity').value = '1';
+    $('#damageQuantity').max = String(Math.max(1, Number(item.total || 1)));
+    $('#damageUnitValue').value = unitValue ? String(unitValue) : '0';
+    $('#damageSuggestedProjectId').value = latestProject?.id || '';
+    $('#damageProductInfo').innerHTML = `<div class="reservation-product-summary"><div><small>${escapeHtml(item.category)} · ${escapeHtml(item.id)}</small><b>${escapeHtml(item.name)}</b><span>${escapeHtml(item.location)} · Bestand ${item.total}</span></div><div class="reservation-free"><b>${item.total}</b><small>Gesamtbestand</small></div></div>`;
+    $('#damageProjectSuggestion').innerHTML = latestProject
+      ? `<div class="reservation-project-head"><div><small>LETZTES PASSENDES PROJEKT</small><b>${escapeHtml(latestProject.name)}</b></div><span class="status-badge">${escapeHtml(latestProject.number || latestProject.id)}</span></div><p>War der Schaden diesem Projekt zuzuordnen?</p>`
+      : '<b>Kein vorheriges Projekt gefunden.</b><br><small>Der Schaden wird intern bei Cocomac erfasst.</small>';
+    const yes = document.querySelector('input[name="damageProjectChoice"][value="yes"]');
+    const no = document.querySelector('input[name="damageProjectChoice"][value="no"]');
+    yes.disabled = !latestProject;
+    yes.checked = Boolean(latestProject);
+    no.checked = !latestProject;
+    $('#actionHelp').textContent = 'Schaden direkt erfassen. Ein vorheriges Projekt wird nur vorgeschlagen und muss nicht ausgewählt werden.';
+    $('#actionSubmitBtn').disabled = false;
+    updateDamageTotal();
+    $('#detailDialog').close();
+    $('#actionDialog').showModal();
+    return;
+  }
 
   const activeProjects = projects.filter(p => !['Abgeschlossen', 'Zurückgegeben'].includes(p.status));
   const projectSelect = $('#actionProject');
   const rows = reservations.filter(r => r.productId === id && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status));
   let selectableProjects = activeProjects;
-  if (['return','defect'].includes(action)) {
+  if (action === 'return') {
     const ids = new Set(rows.filter(r => ['Reserviert','Ausgegeben'].includes(r.status)).map(r => r.projectId));
     selectableProjects = activeProjects.filter(p => ids.has(p.id));
   }
   if (action === 'release') {
     const ids = new Set(rows.filter(r => r.status === 'Defekt').map(r => r.projectId));
     selectableProjects = projects.filter(p => ids.has(p.id));
+    if (ids.has('COCOMAC-INTERN')) selectableProjects = [{id:'COCOMAC-INTERN',name:'Cocomac intern',number:'Interner Schaden',status:'Intern'}, ...selectableProjects];
   }
   projectSelect.innerHTML = '<option value="">Projekt auswählen</option>' + selectableProjects.map(p =>
     `<option value="${escapeHtml(p.id)}">${escapeHtml(projectOptionLabel(p))}</option>`
@@ -431,9 +489,7 @@ function openAction(id, action) {
     ? 'Wähle das Projekt. Der Projektzeitraum wird vorgeschlagen und kann direkt angepasst werden.'
     : action === 'return'
       ? 'Wähle das Projekt, aus dem das Equipment zurückgegeben wird.'
-      : action === 'defect'
-        ? 'Wähle das Projekt, aus dem der Defekt gemeldet wird.'
-        : 'Wähle das Projekt und die defekte Menge, die wieder freigegeben werden soll.';
+      : 'Wähle den Schaden, dessen defekte Menge wieder freigegeben werden soll.';
   updateActionProjectInfo();
   $('#detailDialog').close();
   $('#actionDialog').showModal();
@@ -449,7 +505,7 @@ function actionCandidateRows() {
 
 function updateActionProjectInfo() {
   const action = $('#actionType').value;
-  const project = projects.find(p => p.id === $('#actionProject').value);
+  const project = projectOrInternal($('#actionProject').value);
   const info = $('#actionProjectInfo');
   const from = $('#actionFrom');
   const to = $('#actionTo');
@@ -463,17 +519,17 @@ function updateActionProjectInfo() {
     from.value = project.start; to.value = project.end;
   } else {
     const rows = actionCandidateRows();
-    from.value = rows[0]?.from || project.start;
-    to.value = rows[0]?.to || project.end;
+    from.value = rows[0]?.from || project.start || todayIso();
+    to.value = rows[0]?.to || project.end || todayIso();
   }
-  info.innerHTML = `<div class="reservation-project-head"><div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b></div><span class="status-badge">${escapeHtml(project.status)}</span></div><div class="reservation-project-grid"><div><small>Projektzeitraum</small><b>${formatDate(project.start)}–${formatDate(project.end)}</b></div><div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div></div>`;
+  info.innerHTML = `<div class="reservation-project-head"><div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b></div><span class="status-badge">${escapeHtml(project.status)}</span></div><div class="reservation-project-grid"><div><small>Projektzeitraum</small><b>${project.start ? `${formatDate(project.start)}–${formatDate(project.end)}` : 'Kein Projektzeitraum'}</b></div><div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div></div>`;
   updateActionAvailability();
 }
 
 function updateActionAvailability() {
   const action = $('#actionType').value;
   const item = catalog.find(p => p.id === $('#actionArticleId').value);
-  const project = projects.find(p => p.id === $('#actionProject').value);
+  const project = projectOrInternal($('#actionProject').value);
   const from = $('#actionFrom').value;
   const to = $('#actionTo').value;
   const summary = $('#actionAvailability');
@@ -496,6 +552,30 @@ async function submitMovement(event) {
   event.preventDefault();
   const action = $('#actionType').value;
   const itemId = $('#actionArticleId').value;
+
+  if (action === 'defect') {
+    const item = catalog.find(p => p.id === itemId);
+    const quantity = Number($('#damageQuantity').value);
+    const date = $('#damageDate').value;
+    const description = $('#damageDescription').value.trim();
+    const unitValue = Number($('#damageUnitValue').value || 0);
+    const choice = document.querySelector('input[name="damageProjectChoice"]:checked')?.value || 'no';
+    const suggestedProjectId = $('#damageSuggestedProjectId').value;
+    const projectLinked = choice === 'yes' && Boolean(suggestedProjectId);
+    if (!date || !Number.isInteger(quantity) || quantity < 1 || quantity > Number(item?.total || 0)) return toast('Bitte Schadensdatum und eine gültige Menge eintragen.');
+    if (!description) return toast('Bitte kurz beschreiben, was passiert ist.');
+    const payload = {
+      id: crypto.randomUUID(), productId:itemId, quantity, date, description,
+      projectLinked, projectId: projectLinked ? suggestedProjectId : 'COCOMAC-INTERN',
+      unitValue: Math.max(0, unitValue), totalValue: Math.max(0, unitValue) * quantity,
+      status:'Offen'
+    };
+    if (settings().cloudMode) await sendCloudAction({action:'saveDamage',payload});
+    await refreshCatalog(); render(); $('#actionDialog').close(); openDetail(itemId);
+    toast(projectLinked ? 'Schaden wurde erfasst und dem Projekt berechnet.' : 'Schaden wurde als interner Cocomac-Schaden erfasst.');
+    return;
+  }
+
   const projectId = $('#actionProject').value;
   const quantity = Number($('#quantity').value);
   const from = $('#actionFrom').value;
@@ -509,17 +589,15 @@ async function submitMovement(event) {
     if (quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
     const reservation = normalizeReservation({id:crypto.randomUUID(), projectId, productId:itemId, quantity, from, to, status:'Ausgegeben', note});
     if (settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:reservation});
-    const local = readJson(LOCAL_RESERVATIONS_KEY,[]); local.push(reservation); localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
   } else {
     const candidates = actionCandidateRows();
     const max = candidates.reduce((sum,r)=>sum+r.quantity,0);
     if (quantity > max) return toast(`Für diese Aktion sind nur ${max} Stück verfügbar.`);
     const payload = {actionType:action, projectId, productId:itemId, quantity, from, to, note};
     if (settings().cloudMode) await sendCloudAction({action:'reservationAction',payload});
-    applyLocalReservationAction(payload);
   }
   await refreshCatalog(); render(); $('#actionDialog').close(); openDetail(itemId);
-  toast(action === 'checkout' ? 'Equipment wurde ausgeliehen.' : action === 'return' ? 'Equipment wurde zurückgegeben.' : action === 'defect' ? 'Defekt wurde erfasst.' : 'Defekte Menge wurde wieder freigegeben.');
+  toast(action === 'checkout' ? 'Equipment wurde ausgeliehen.' : action === 'return' ? 'Equipment wurde zurückgegeben.' : 'Defekte Menge wurde wieder freigegeben.');
 }
 
 function applyLocalReservationAction(payload) {
@@ -723,8 +801,8 @@ async function submitProduct(event) {
   saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
   try {
     const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
-    if (selectedProductImage?.dataUrl) await sendCloudAction({action:'addProduct', payload});
-    else await sendCloudJsonpAction('addProduct', payload);
+    if (selectedProductImage?.dataUrl) await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
+    else await sendCloudJsonpAction('addProduct', adminPayload(payload));
     await syncFromCloud({force:true});
     $('#productDialog').close();
     toast(existing ? 'Produkt wurde aktualisiert.' : `${product.id} wurde angelegt.`);
@@ -737,7 +815,7 @@ async function syncDriveImages() {
   const button = $('#syncDriveImagesBtn');
   if (button) { button.disabled = true; button.textContent = 'Bilder werden zugeordnet …'; }
   try {
-    const result = await sendCloudJsonpAction('syncProductImages', {});
+    const result = await sendCloudJsonpAction('syncProductImages', adminPayload());
     await syncFromCloud({ force: true });
     const count = Number(result?.assigned || 0);
     const unresolved = Array.isArray(result?.unresolved) ? result.unresolved.length : 0;
@@ -815,11 +893,63 @@ async function testCloudConnection(apiUrl) {
   return true;
 }
 
+
+function getAdminToken() { return sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''; }
+function setAdminToken(token) {
+  if (token) sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+  else sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+function adminPayload(payload = {}) { return { ...payload, adminToken: getAdminToken() }; }
+async function ensureAdminAccess() {
+  const token = getAdminToken();
+  if (!token) { $('#adminLoginError').hidden = true; $('#adminLoginForm').reset(); $('#adminLoginDialog').showModal(); return false; }
+  try {
+    await sendCloudJsonpAction('adminStatus', { adminToken: token });
+    return true;
+  } catch (_) {
+    setAdminToken('');
+    $('#adminLoginError').textContent = 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.';
+    $('#adminLoginError').hidden = false;
+    $('#adminLoginDialog').showModal();
+    return false;
+  }
+}
+async function openAdministration() {
+  closeMainMenu();
+  if (!(await ensureAdminAccess())) return;
+  showPage('adminPage');
+  renderAdminProjects();
+  renderAdminProducts();
+}
+async function submitAdminLogin(event) {
+  event.preventDefault();
+  const button = $('#adminLoginSubmitBtn');
+  button.disabled = true; button.textContent = 'Wird geprüft …';
+  $('#adminLoginError').hidden = true;
+  try {
+    const response = await sendCloudJsonpAction('adminLogin', {
+      username: $('#adminUsername').value.trim(),
+      password: $('#adminPassword').value
+    });
+    setAdminToken(response.adminToken || '');
+    $('#adminLoginDialog').close();
+    showPage('adminPage');
+    renderAdminProjects();
+    renderAdminProducts();
+    toast('Administration entsperrt.');
+  } catch (error) {
+    $('#adminLoginError').textContent = error.message || 'Anmeldung fehlgeschlagen.';
+    $('#adminLoginError').hidden = false;
+  } finally { button.disabled = false; button.textContent = 'Anmelden'; }
+}
+
 function bind() {
   $('#search').oninput = render;
-  $$('.menu-nav').forEach(button => button.onclick = () => { showPage(button.dataset.page); closeMainMenu(); });
+  $$('.menu-nav').forEach(button => button.onclick = () => { if (button.dataset.page === 'adminPage') openAdministration(); else { showPage(button.dataset.page); closeMainMenu(); } });
   $('#menuBtn').onclick = toggleMainMenu;
   $('#menuSettingsBtn').onclick = () => { closeMainMenu(); openSettingsDialog(); };
+  $('#adminLoginForm').onsubmit = submitAdminLogin;
+  $('#adminLogoutBtn').onclick = () => { setAdminToken(''); showPage('equipmentPage'); toast('Administration wurde gesperrt.'); };
   document.addEventListener('click', event => {
     if (!event.target.closest('.topbar-actions')) closeMainMenu();
   });
@@ -840,6 +970,8 @@ function bind() {
   $('#actionProject').onchange = updateActionProjectInfo;
   $('#actionFrom').onchange = updateActionAvailability;
   $('#actionTo').onchange = updateActionAvailability;
+  $('#damageQuantity').oninput = updateDamageTotal;
+  $('#damageUnitValue').oninput = updateDamageTotal;
   $('#quantity').oninput = updateActionAvailability;
   $('#productForm').onsubmit = submitProduct;
   if ($('#addProductBtn')) $('#addProductBtn').onclick = openProductDialog;
@@ -1028,6 +1160,16 @@ function normalizeReservation(item) {
     status: String(item.status || 'Reserviert'), note: String(item.note || '')
   };
 }
+function normalizeDamage(item) {
+  return {
+    id: String(item.id || ''), productId: String(item.productId || '').toUpperCase(),
+    quantity: Number(item.quantity || 0), date: String(item.date || ''),
+    description: String(item.description || ''), projectId: String(item.projectId || ''),
+    projectLinked: Boolean(item.projectLinked), unitValue: Number(item.unitValue || 0),
+    totalValue: Number(item.totalValue || 0), status: String(item.status || 'Offen')
+  };
+}
+
 function dateOnly(value) {
   if (!value) return '';
   const text = String(value);
@@ -1080,9 +1222,9 @@ async function deleteProject(projectId) {
   const bookingNote = linked.length ? ` Dabei werden auch ${linked.length} zugehörige Buchung${linked.length === 1 ? '' : 'en'} gelöscht.` : '';
   if (!confirm(`Projekt „${project.name}“ wirklich löschen?${bookingNote} Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
   try {
-    if (settings().cloudMode) await sendCloudJsonpAction('deleteProject',{projectId});
-    $('#projectDetailDialog').close();
-    await refreshCatalog(); render(); showPage('projectsPage'); toast('Projekt gelöscht.');
+    if (settings().cloudMode) await sendCloudJsonpAction('deleteProject',adminPayload({projectId}));
+    $('#projectDetailDialog')?.close();
+    await refreshCatalog(); render(); showPage('adminPage'); renderAdminProjects(); toast('Projekt gelöscht.');
   } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
 }
 function showPage(pageId) {
@@ -1183,11 +1325,10 @@ function projectReservations(projectId) { return reservations.filter(r=>r.projec
 function openProjectDetail(projectId) {
   const p=projects.find(x=>x.id===projectId); if(!p) return toast('Projekt nicht gefunden.'); activeProjectId=p.id;
   const rows=projectReservations(p.id);
-  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="printProjectBtn" type="button" class="ghost">Beleg / PDF drucken</button>${p.email1?'<button id="emailProjectBtn" type="button" class="ghost">Per E-Mail senden</button>':''}<button id="deleteProjectBtn" type="button" class="danger">Projekt löschen</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="printProjectBtn" type="button" class="ghost">Beleg / PDF drucken</button>${p.email1?'<button id="emailProjectBtn" type="button" class="ghost">Per E-Mail senden</button>':''}</div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
   $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
   $$('[data-edit-reservation]').forEach(button => button.onclick = () => openReservationDialog(p.id, '', 'project', button.dataset.editReservation));
   $('#editProjectBtn').onclick=()=>{ $('#projectDetailDialog').close(); openProjectDialog(p.id); };
-  $('#deleteProjectBtn').onclick=()=>deleteProject(p.id);
   $('#printProjectBtn').onclick=()=>printProjectDocument(p.id);
   if($('#emailProjectBtn')) $('#emailProjectBtn').onclick=()=>emailProjectDocument(p.id);
   $('#projectDetailDialog').showModal();
@@ -1274,7 +1415,7 @@ function updateReservationProjectInfo() {
       <span class="status-badge">${escapeHtml(project.status)}</span>
     </div>
     <div class="reservation-project-grid">
-      <div><small>Zeitraum</small><b>${formatDate(project.start)}–${formatDate(project.end)}</b></div>
+      <div><small>Zeitraum</small><b>${project.start ? `${formatDate(project.start)}–${formatDate(project.end)}` : 'Kein Projektzeitraum'}</b></div>
       <div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div>
       <div><small>E-Mail</small><b>${escapeHtml(emails)}</b></div>
       <div><small>Bereits zugeordnet</small><b>${projectReservations(project.id).reduce((sum, row) => sum + row.quantity, 0)} Teile</b></div>
@@ -1371,6 +1512,22 @@ async function removeReservationFromProject() {
 }
 
 
+function renderAdminProjects() {
+  const wrap = $('#adminProjectList');
+  if (!wrap) return;
+  const sorted = projects.slice().sort((a,b) => String(b.start).localeCompare(String(a.start)));
+  wrap.innerHTML = sorted.length ? sorted.map(project => {
+    const linked = reservations.filter(item => item.projectId === project.id && item.status !== 'Storniert');
+    return `<div class="admin-product-row admin-project-row">
+      <div class="admin-project-icon">CME</div>
+      <div><b>${escapeHtml(project.name)}</b><br><small>${escapeHtml(project.number || project.id)} · ${formatDate(project.start)}–${formatDate(project.end)} · ${linked.length} Buchungen</small></div>
+      <div class="admin-row-actions"><button type="button" class="ghost" data-admin-edit-project="${escapeHtml(project.id)}">Bearbeiten</button><button type="button" class="danger" data-admin-delete-project="${escapeHtml(project.id)}">Löschen</button></div>
+    </div>`;
+  }).join('') : '<div class="empty-state">Keine Projekte vorhanden.</div>';
+  $$('[data-admin-edit-project]').forEach(button => button.onclick = () => openProjectDialog(button.dataset.adminEditProject));
+  $$('[data-admin-delete-project]').forEach(button => button.onclick = () => deleteProject(button.dataset.adminDeleteProject));
+}
+
 function renderAdminProducts() {
   const wrap = $('#adminProductList');
   if (!wrap) return;
@@ -1394,7 +1551,7 @@ async function deleteProduct(productId) {
   if (linked.length) return toast('Dieses Produkt ist noch in aktiven Projekten reserviert und kann deshalb nicht gelöscht werden.');
   if (!confirm(`„${product.name}“ wirklich löschen? Dieser Schritt blendet das Produkt auf allen Geräten aus.`)) return;
   try {
-    if (settings().cloudMode) await sendCloudJsonpAction('deleteProduct',{productId});
+    if (settings().cloudMode) await sendCloudJsonpAction('deleteProduct',adminPayload({productId}));
     const deleted = new Set(readJson(LOCAL_DELETED_PRODUCTS_KEY, []).map(id => String(id).toUpperCase()));
     deleted.add(productId.toUpperCase());
     localStorage.setItem(LOCAL_DELETED_PRODUCTS_KEY, JSON.stringify([...deleted]));
@@ -1433,6 +1590,7 @@ function projectDocumentHtml(projectId) {
   const p = projects.find(x => x.id === projectId);
   if (!p) throw new Error('Projekt nicht gefunden.');
   const rows = projectReservations(projectId);
+  const projectDamages = damages.filter(d => d.projectLinked && d.projectId === projectId);
   let grandTotal = 0;
   const items = rows.map(r => {
     const item = catalog.find(x => x.id === r.productId);
@@ -1449,9 +1607,12 @@ function projectDocumentHtml(projectId) {
       <td>${euro(lineTotal)}</td>
     </tr>`;
   }).join('');
+  const damageTotal = projectDamages.reduce((sum, d) => sum + Number(d.totalValue || 0), 0);
+  grandTotal += damageTotal;
+  const damageItems = projectDamages.map(d => { const item = catalog.find(x => x.id === d.productId); return `<tr class="damage-line"><td>${escapeHtml(d.productId)}</td><td><b>Schaden: ${escapeHtml(item?.name || d.productId)}</b><br><small>${escapeHtml(d.description)}</small></td><td>${d.quantity}</td><td>${formatDate(d.date)}</td><td>${euro(d.unitValue)}</td><td>${euro(d.totalValue)}</td></tr>`; }).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipment ${escapeHtml(p.name)}</title><style>
     *{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1100px;margin:auto}h1{margin:8px 0 4px}h2{margin:0 0 16px}.project-number{font-weight:700;letter-spacing:.05em}.meta{line-height:1.7;margin:18px 0}.table-wrap{width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:24px;min-width:780px}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em}small{color:#666}.total{margin:20px 0 0 auto;width:min(340px,100%);display:flex;justify-content:space-between;border-top:2px solid #171716;padding-top:12px;font-size:18px}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media(max-width:700px){body{padding:18px}.sign{gap:30px}.line{width:50%}}@media print{body{padding:0}.table-wrap{overflow:visible}table{min-width:0}.no-print{display:none}}
-  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Preis / Tag</th><th>Mietpreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Preis / Tag</th><th>Mietpreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}${damageItems}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 function printProjectDocument(projectId) {
   let html;
