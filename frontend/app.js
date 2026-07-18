@@ -8,6 +8,8 @@ const LOCAL_PROJECTS_KEY = 'cocomac-essential-projects-v1';
 const LOCAL_RESERVATIONS_KEY = 'cocomac-essential-reservations-v1';
 const LOCAL_DELETED_PRODUCTS_KEY = 'cocomac-essential-deleted-products-v1';
 const PRODUCT_URL_BASE = 'https://remi-cmf.github.io/cocomac-essentials/';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwxUcXelc6_DoQNZU6OlgDbbPlTnTqdURV9ebx-hhnfSpRGUxK8L6NROY84QPva2bhI/exec';
+const CLOUD_MODE_LOCKED = true;
 
 let baseCatalog = [];
 let catalog = [];
@@ -56,7 +58,16 @@ function readJson(key, fallback) {
 }
 
 function settings() {
-  return readJson(SETTINGS_KEY, { cloudMode: false, apiUrl: '' });
+  const stored = readJson(SETTINGS_KEY, {});
+  const configured = {
+    ...stored,
+    cloudMode: CLOUD_MODE_LOCKED ? true : Boolean(stored.cloudMode),
+    apiUrl: DEFAULT_API_URL
+  };
+
+  // Migriert ältere Installationen automatisch vom lokalen Testmodus in die Cloud.
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(configured));
+  return configured;
 }
 
 async function refreshCatalog() {
@@ -195,10 +206,8 @@ function render() {
   });
 
   const currentSettings = settings();
-  $('#syncBanner').textContent = currentSettings.cloudMode
-    ? 'Cloud-Modus aktiv: Produkte und Buchungen werden mit Google Sheets synchronisiert.'
-    : 'Testmodus: Neue Produkte und Buchungen werden nur auf diesem Gerät gespeichert.';
-  $('#syncBanner').classList.toggle('demo', !currentSettings.cloudMode);
+  $('#syncBanner').textContent = 'Synchronisierung aktiv: Änderungen werden über Google Sheets auf allen Geräten übernommen.';
+  $('#syncBanner').classList.remove('demo');
   renderProjects();
   renderCalendar();
   renderAdminProducts();
@@ -715,30 +724,6 @@ function bind() {
   $('#productCategory').onchange = updateProductIdPreview;
   bindImageUpload();
 
-const settingsBtn = $('#settingsBtn');
-
-if (settingsBtn) {
-  settingsBtn.onclick = () => {
-    const currentSettings = settings();
-
-    const apiUrlInput = $('#apiUrl');
-    const cloudModeInput = $('#cloudMode');
-    const settingsDialog = $('#settingsDialog');
-
-    if (apiUrlInput) {
-      apiUrlInput.value = currentSettings.apiUrl || '';
-    }
-
-    if (cloudModeInput) {
-      cloudModeInput.checked = !!currentSettings.cloudMode;
-    }
-
-    if (settingsDialog) {
-      settingsDialog.showModal();
-    }
-  };
-}
-
   $('#scanBtn').onclick = () => $('#scanDialog').showModal();
 
   $$('[data-close]').forEach(button => {
@@ -757,14 +742,14 @@ if (settingsBtn) {
 
   $('#settingsForm').onsubmit = async event => {
     event.preventDefault();
-    const newSettings = { apiUrl: $('#apiUrl').value.trim(), cloudMode: $('#cloudMode').checked };
+    const newSettings = { apiUrl: DEFAULT_API_URL, cloudMode: true };
     try {
       if (newSettings.cloudMode) await testCloudConnection(newSettings.apiUrl);
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
       await refreshCatalog();
       render();
       $('#settingsDialog').close();
-      toast(newSettings.cloudMode ? 'Verbindung gespeichert. Cloud-Modus ist aktiv.' : 'Testmodus ist aktiv.');
+      toast('Verbindung gespeichert. Synchronisierung ist aktiv.');
     } catch (error) {
       toast('Verbindung fehlgeschlagen: ' + error.message);
     }
@@ -945,9 +930,18 @@ function closeMainMenu() {
 }
 function openSettingsDialog() {
   const currentSettings = settings();
-  $('#apiUrl').value = currentSettings.apiUrl || '';
-  $('#cloudMode').checked = Boolean(currentSettings.cloudMode);
-  $('#settingsDialog').showModal();
+  const apiUrlInput = $('#apiUrl');
+  const cloudModeInput = $('#cloudMode');
+  const settingsDialog = $('#settingsDialog');
+  if (apiUrlInput) {
+    apiUrlInput.value = currentSettings.apiUrl;
+    apiUrlInput.readOnly = true;
+  }
+  if (cloudModeInput) {
+    cloudModeInput.checked = true;
+    cloudModeInput.disabled = true;
+  }
+  settingsDialog?.showModal();
 }
 async function deleteProject(projectId) {
   const project = projects.find(item => item.id === projectId);
