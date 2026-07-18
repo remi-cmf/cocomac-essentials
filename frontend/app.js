@@ -27,6 +27,7 @@ let reservationOrigin = 'project';
 let cloudSyncTimer = null;
 let cloudSyncRunning = false;
 let lastCloudSyncAt = 0;
+let automaticImageSyncAttempted = false;
 
 async function boot() {
   baseCatalog = await fetch('./data/equipment.json', { cache: 'no-store' })
@@ -85,6 +86,15 @@ async function refreshCatalog() {
   projects = (snapshot.projects || []).map(normalizeProject).sort((a,b) => String(b.start).localeCompare(String(a.start)));
   reservations = (snapshot.reservations || []).map(normalizeReservation);
   imageLibrary = Array.isArray(snapshot.images) ? snapshot.images : [];
+  applyLocalDriveImageMatches();
+
+  // Die Zuordnung wird einmal pro Sitzung automatisch in Google Sheets gespeichert.
+  // Dadurch erscheinen vorhandene Drive-Bilder ohne zusätzlichen Admin-Schritt.
+  const missingImages = catalog.filter(product => !productImageSource(product));
+  if (!automaticImageSyncAttempted && missingImages.length && imageLibrary.length) {
+    automaticImageSyncAttempted = true;
+    setTimeout(() => automaticDriveImageSync(), 50);
+  }
 
   // Alte Testdaten dürfen die zentrale Datenbank nicht mehr überschreiben.
   localStorage.removeItem(LOCAL_PRODUCTS_KEY);
@@ -155,6 +165,57 @@ function productImageSource(item) {
   if (item.imageUrl) return item.imageUrl;
   if (item.image?.startsWith('data:') || item.image?.startsWith('http')) return item.image;
   return item.image ? `./assets/images/${item.image}` : '';
+}
+
+function normalizedImageKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function findLocalDriveImage(product) {
+  const idKey = normalizedImageKey(product.id);
+  const nameKey = normalizedImageKey(product.name);
+  const usefulTokens = nameKey.split('-').filter(token => token.length >= 3 && !['inkl','oder','eine','einer','set'].includes(token));
+  let best = null;
+  let bestScore = 0;
+  for (const image of imageLibrary) {
+    const fileKey = normalizedImageKey(image.name);
+    let score = 0;
+    if (idKey && fileKey === idKey) score = 120;
+    else if (idKey && fileKey.includes(idKey)) score = 110;
+    else if (nameKey && fileKey === nameKey) score = 100;
+    else if (nameKey && (fileKey.includes(nameKey) || nameKey.includes(fileKey))) score = 88;
+    else {
+      const hits = usefulTokens.filter(token => fileKey.includes(token)).length;
+      if (hits) score = hits * 22 + Math.min(15, fileKey.length ? Math.round((hits / usefulTokens.length) * 15) : 0);
+    }
+    if (score > bestScore) { bestScore = score; best = image; }
+  }
+  return bestScore >= 35 ? best : null;
+}
+
+function applyLocalDriveImageMatches() {
+  if (!imageLibrary.length) return;
+  catalog.forEach(product => {
+    if (productImageSource(product)) return;
+    const match = findLocalDriveImage(product);
+    if (match?.url) product.imageUrl = match.url;
+  });
+}
+
+async function automaticDriveImageSync() {
+  try {
+    const result = await sendCloudJsonpAction('syncProductImages', {});
+    if (Number(result?.assigned || 0) > 0) {
+      await syncFromCloud({ force: true });
+    }
+  } catch (error) {
+    console.warn('Automatische Bildzuordnung fehlgeschlagen:', error);
+  }
 }
 
 function makeProductUrl(id) {

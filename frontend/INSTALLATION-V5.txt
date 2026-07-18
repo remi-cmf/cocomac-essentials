@@ -1,0 +1,8 @@
+Cocomac Essentials V5
+
+1. Alle Frontend-Dateien in GitHub ersetzen.
+2. Google Apps Script V5 einsetzen und als neue Version bereitstellen.
+3. Im Apps Script setupCocomacEssentials einmal ausführen.
+4. Mac: Cmd+Shift+R. iPhone/iPad: App komplett schließen und neu öffnen.
+
+Die App versucht die Bilder beim ersten Laden automatisch aus dem festgelegten Drive-Ordner zuzuordnen.
