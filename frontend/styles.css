@@ -98,3 +98,31 @@ form{display:grid;gap:12px}label{display:grid;gap:6px;font-size:13px;color:var(-
 @media(max-width:650px){.topbar small{font-size:10px}.topbar h1{font-size:22px}.menu-button{width:42px;height:42px}}
 
 .booking-row-button{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}.booking-row-button:hover{border-color:var(--ink);transform:translateY(-1px)}.booking-row-side{display:grid;justify-items:end;gap:5px}.booking-row-side small{color:var(--muted)}.reservation-form-actions{display:flex;flex-wrap:wrap;gap:9px}.reservation-form-actions button{flex:1 1 220px}
+.admin-row-actions { display:flex; gap:.55rem; flex-wrap:wrap; justify-content:flex-end; }
+.admin-product-row .admin-row-actions button { width:auto; }
+
+
+/* V3: ausschließlich vertikales Scrollen und stabile mobile Breiten */
+html,body{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y}
+body{position:relative}
+img,svg,video,canvas,iframe{max-width:100%}
+input,select,textarea,button{max-width:100%;min-width:0}
+.app-page,main,section,article,dialog,.topbar,.page-heading,.toolbar,.grid,.project-grid,.booking-table,.calendar-filter,.availability-list,.timeline{max-width:100%;min-width:0}
+.app-nav{overflow:visible;flex-wrap:wrap}
+.page-heading>*{min-width:0}
+.project-card-head,.booking-row,.reservation-project-head{min-width:0}
+.project-card-head small,.booking-row div,.timeline-item div,.availability-row div{min-width:0;overflow-wrap:anywhere}
+
+/* Kalender: Produktbalken mittig und auf allen Geräten gleich breit */
+#calendarSummary,#availabilityList,#calendarBookings,.calendar-filter,.section-title{width:min(920px,100%);margin-left:auto;margin-right:auto}
+.availability-row{width:100%;margin:0 auto}
+.availability-row>div:first-child{text-align:left}
+.availability-count{justify-self:center;width:100%;max-width:80px}
+.timeline-item{width:100%;margin:0 auto}
+
+@media(max-width:650px){
+  .availability-row{grid-template-columns:minmax(0,1fr) 58px 58px;gap:7px;padding:11px 9px}
+  .availability-count{max-width:58px;padding:7px 3px}
+  .timeline-item{grid-template-columns:82px minmax(0,1fr);gap:10px}
+  dialog{max-width:calc(100vw - 16px)!important;margin-left:auto;margin-right:auto}
+}

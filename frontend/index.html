@@ -238,9 +238,10 @@
   <dialog id="productDialog" class="product-dialog">
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="productForm">
+      <input id="productEditId" type="hidden">
       <div>
         <small>COCOMAC ESSENTIAL</small>
-        <h2>Neues Produkt</h2>
+        <h2 id="productDialogTitle">Neues Produkt</h2>
         <p id="newProductIdPreview" class="meta">Die Artikel-ID wird automatisch erzeugt.</p>
       </div>
 
@@ -264,8 +265,13 @@
         <label>Menge<input id="productTotal" type="number" min="1" value="1" required></label>
         <label>Zustand<select id="productCondition"><option>Sehr gut</option><option selected>Gut</option><option>Gebraucht</option><option>Reparatur nötig</option></select></label>
         <label>Maße<input id="productDimensions" placeholder="optional"></label>
-        <label>Tagespreis in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Tagespreis / Mietpreis in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Anschaffungspreis in €<input id="productPurchasePrice" type="number" min="0" step="0.01" placeholder="optional"></label>
         <label>Wiederbeschaffung in €<input id="productReplacementValue" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Gewicht<input id="productWeight" placeholder="z. B. 4,2 kg"></label>
+        <label>Hersteller<input id="productManufacturer" placeholder="optional"></label>
+        <label>Seriennummer<input id="productSerialNumber" placeholder="optional"></label>
+        <label>Kaufdatum<input id="productPurchaseDate" type="date"></label>
       </div>
       <label>Beschreibung<textarea id="productDescription" placeholder="optional"></textarea></label>
       <label>Notiz<textarea id="productNotes" placeholder="optional"></textarea></label>
@@ -392,6 +398,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=12" type="module"></script>
+  <script src="./app.js?v=21" type="module"></script>
 </body>
 </html>

@@ -75,47 +75,20 @@ function settings() {
 }
 
 async function refreshCatalog() {
-  const localProducts = readJson(LOCAL_PRODUCTS_KEY, []);
-  const localProjects = readJson(LOCAL_PROJECTS_KEY, []);
-  const localReservations = readJson(LOCAL_RESERVATIONS_KEY, []);
-  let cloudProducts = [];
-  let cloudProjects = [];
-  let cloudReservations = [];
-  let cloudDeletedProductIds = [];
-
   const currentSettings = settings();
-  if (currentSettings.cloudMode && currentSettings.apiUrl) {
-    try {
-      const snapshot = await loadCloudSnapshot(currentSettings.apiUrl);
-      cloudProducts = snapshot.products || [];
-      cloudProjects = snapshot.projects || [];
-      cloudReservations = snapshot.reservations || [];
-      cloudDeletedProductIds = snapshot.deletedProductIds || [];
-    } catch (error) {
-      console.warn('Cloud-Daten konnten nicht geladen werden:', error);
-    }
+  if (!currentSettings.cloudMode || !currentSettings.apiUrl) {
+    throw new Error('Die Cloud-Verbindung ist nicht aktiv.');
   }
+  const snapshot = await loadCloudSnapshot(currentSettings.apiUrl);
+  catalog = (snapshot.products || []).map(normalizeProduct);
+  projects = (snapshot.projects || []).map(normalizeProject).sort((a,b) => String(b.start).localeCompare(String(a.start)));
+  reservations = (snapshot.reservations || []).map(normalizeReservation);
 
-  const deletedProductIds = new Set([
-    ...readJson(LOCAL_DELETED_PRODUCTS_KEY, []),
-    ...cloudDeletedProductIds
-  ].map(id => String(id).toUpperCase()));
-
-  const merged = new Map();
-  [...baseCatalog, ...localProducts, ...cloudProducts].forEach(item => {
-    if (item?.id && !deletedProductIds.has(String(item.id).toUpperCase())) {
-      merged.set(String(item.id).toUpperCase(), normalizeProduct(item));
-    }
-  });
-  catalog = [...merged.values()];
-
-  const projectMap = new Map();
-  [...localProjects, ...cloudProjects].forEach(item => { if (item?.id) projectMap.set(String(item.id), normalizeProject(item)); });
-  projects = [...projectMap.values()].sort((a,b) => String(b.start).localeCompare(String(a.start)));
-
-  const reservationMap = new Map();
-  [...localReservations, ...cloudReservations].forEach(item => { if (item?.id) reservationMap.set(String(item.id), normalizeReservation(item)); });
-  reservations = [...reservationMap.values()];
+  // Alte Testdaten dürfen die zentrale Datenbank nicht mehr überschreiben.
+  localStorage.removeItem(LOCAL_PRODUCTS_KEY);
+  localStorage.removeItem(LOCAL_PROJECTS_KEY);
+  localStorage.removeItem(LOCAL_RESERVATIONS_KEY);
+  localStorage.removeItem(LOCAL_DELETED_PRODUCTS_KEY);
   populateCategoryOptions();
 }
 
@@ -164,6 +137,11 @@ function normalizeProduct(item) {
     dimensions: String(item.dimensions || ''),
     dailyPrice: Number(item.dailyPrice || 0),
     replacementValue: Number(item.replacementValue || 0),
+    purchasePrice: Number(item.purchasePrice || 0),
+    weight: String(item.weight || ''),
+    manufacturer: String(item.manufacturer || ''),
+    serialNumber: String(item.serialNumber || ''),
+    purchaseDate: String(item.purchaseDate || ''),
     notes: String(item.notes || ''),
     image: String(item.image || ''),
     imageUrl: String(item.imageUrl || ''),
@@ -520,12 +498,37 @@ function populateCategoryOptions() {
   }
 }
 
-function openProductDialog() {
+function openProductDialog(productId = '') {
   populateCategoryOptions();
   $('#productForm').reset();
+  $('#productEditId').value = productId;
   selectedProductImage = null;
-  $('#productImagePreview').innerHTML = '<span>Foto hier ablegen oder auswählen</span>';
-  $('#newProductIdPreview').textContent = 'Die Artikel-ID wird automatisch erzeugt.';
+  const product = catalog.find(item => item.id === productId);
+  $('#productDialogTitle').textContent = product ? 'Produkt bearbeiten' : 'Neues Produkt';
+  $('#saveProductBtn').textContent = product ? 'Änderungen speichern' : 'Produkt speichern';
+  if (product) {
+    $('#newProductIdPreview').textContent = `Artikel-ID: ${product.id}`;
+    $('#productName').value = product.name;
+    $('#productCategory').value = product.category;
+    $('#productLocation').value = product.location;
+    $('#productTotal').value = product.total;
+    $('#productCondition').value = product.condition;
+    $('#productDimensions').value = product.dimensions;
+    $('#productDailyPrice').value = product.dailyPrice || '';
+    $('#productReplacementValue').value = product.replacementValue || '';
+    $('#productPurchasePrice').value = product.purchasePrice || '';
+    $('#productWeight').value = product.weight || '';
+    $('#productManufacturer').value = product.manufacturer || '';
+    $('#productSerialNumber').value = product.serialNumber || '';
+    $('#productPurchaseDate').value = product.purchaseDate || '';
+    $('#productDescription').value = product.description;
+    $('#productNotes').value = product.notes;
+    const image = productImageSource(product);
+    $('#productImagePreview').innerHTML = image ? `<img src="${escapeHtml(image)}" alt="Vorschau"><span>Vorhandenes Foto</span>` : '<span>Foto hier ablegen oder auswählen</span>';
+  } else {
+    $('#productImagePreview').innerHTML = '<span>Foto hier ablegen oder auswählen</span>';
+    $('#newProductIdPreview').textContent = 'Die Artikel-ID wird automatisch erzeugt.';
+  }
   $('#productDialog').showModal();
 }
 
@@ -621,64 +624,37 @@ function compressImage(file, maxSize, quality) {
 
 async function submitProduct(event) {
   event.preventDefault();
+  const editId = $('#productEditId').value;
+  const existing = catalog.find(item => item.id === editId);
   const category = $('#productCategory').value.trim();
-  const id = nextProductId(category);
+  const id = existing?.id || nextProductId(category);
   const product = normalizeProduct({
+    ...existing,
     id,
-    name: $('#productName').value.trim(),
-    category,
-    location: $('#productLocation').value.trim(),
-    total: Number($('#productTotal').value),
-    condition: $('#productCondition').value,
-    description: $('#productDescription').value.trim(),
-    dimensions: $('#productDimensions').value.trim(),
-    dailyPrice: Number($('#productDailyPrice').value || 0),
+    name: $('#productName').value.trim(), category,
+    location: $('#productLocation').value.trim(), total: Number($('#productTotal').value),
+    condition: $('#productCondition').value, description: $('#productDescription').value.trim(),
+    dimensions: $('#productDimensions').value.trim(), dailyPrice: Number($('#productDailyPrice').value || 0),
     replacementValue: Number($('#productReplacementValue').value || 0),
-    notes: $('#productNotes').value.trim(),
-    productUrl: makeProductUrl(id),
-    imageUrl: selectedProductImage?.dataUrl || ''
+    purchasePrice: Number($('#productPurchasePrice').value || 0), weight: $('#productWeight').value.trim(),
+    manufacturer: $('#productManufacturer').value.trim(), serialNumber: $('#productSerialNumber').value.trim(),
+    purchaseDate: $('#productPurchaseDate').value, notes: $('#productNotes').value.trim(),
+    productUrl: makeProductUrl(id), imageUrl: existing?.imageUrl || ''
   });
-
   if (!product.name || !product.category || !product.location) return toast('Bitte Name, Kategorie und Standort ausfüllen.');
   if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
-
   const saveButton = $('#saveProductBtn');
-  saveButton.disabled = true;
-  saveButton.textContent = 'Wird gespeichert …';
-
+  saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
   try {
-    const currentSettings = settings();
-    if (currentSettings.cloudMode) {
-      await sendCloudAction({
-        action: 'addProduct',
-        payload: {
-          ...product,
-          imageBase64: selectedProductImage?.dataUrl || '',
-          imageName: `${id}.jpg`
-        }
-      });
-    }
-
-    const localProducts = readJson(LOCAL_PRODUCTS_KEY, []);
-    const withoutSameId = localProducts.filter(item => item.id !== product.id);
-    withoutSameId.push(product);
-    localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(withoutSameId));
-    const deleted = readJson(LOCAL_DELETED_PRODUCTS_KEY, []).filter(itemId => String(itemId).toUpperCase() !== product.id);
-    localStorage.setItem(LOCAL_DELETED_PRODUCTS_KEY, JSON.stringify(deleted));
-
-    await refreshCatalog();
-    render();
+    const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
+    if (selectedProductImage) await sendCloudAction({action:'addProduct', payload});
+    else await sendCloudJsonpAction('addProduct', payload);
+    await syncFromCloud({force:true});
     $('#productDialog').close();
-    toast(currentSettings.cloudMode
-      ? `${product.id} wurde gespeichert. Das Produkt erscheint auch in Google Sheets.`
-      : `${product.id} wurde auf diesem Gerät gespeichert.`);
+    toast(existing ? 'Produkt wurde aktualisiert.' : `${product.id} wurde angelegt.`);
     openDetail(product.id);
-  } catch (error) {
-    toast('Produkt konnte nicht gespeichert werden: ' + error.message);
-  } finally {
-    saveButton.disabled = false;
-    saveButton.textContent = 'Produkt speichern';
-  }
+  } catch (error) { toast('Produkt konnte nicht gespeichert werden: ' + error.message); }
+  finally { saveButton.disabled = false; saveButton.textContent = existing ? 'Änderungen speichern' : 'Produkt speichern'; }
 }
 
 function cleanApiUrl(value) {
@@ -717,6 +693,23 @@ function loadCloudSnapshot(apiUrl) {
       : cleanup(null, response);
     script.onerror = () => cleanup(new Error('Backend konnte nicht erreicht werden.'));
     script.src = `${url}?action=snapshot&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
+    document.head.appendChild(script);
+  });
+}
+
+function sendCloudJsonpAction(action, payload = {}) {
+  const url = cleanApiUrl(settings().apiUrl);
+  return new Promise((resolve, reject) => {
+    const callbackName = `cocomacWrite_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => cleanup(new Error('Zeitüberschreitung beim Speichern.')), 20000);
+    function cleanup(error, data) {
+      clearTimeout(timeout); delete window[callbackName]; script.remove();
+      error ? reject(error) : resolve(data);
+    }
+    window[callbackName] = response => response?.ok === false ? cleanup(new Error(response.error || 'Cloud-Fehler')) : cleanup(null, response);
+    script.onerror = () => cleanup(new Error('Backend konnte nicht erreicht werden.'));
+    script.src = `${url}?action=${encodeURIComponent(action)}&payload=${encodeURIComponent(JSON.stringify(payload))}&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
     document.head.appendChild(script);
   });
 }
@@ -984,12 +977,10 @@ async function deleteProject(projectId) {
   const project = projects.find(item => item.id === projectId);
   if (!project) return;
   const linked = reservations.filter(item => item.projectId === projectId && item.status !== 'Storniert');
-  if (linked.length) return toast('Das Projekt enthält noch Buchungen. Entferne oder storniere diese zuerst.');
-  if (!confirm(`Projekt „${project.name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  const bookingNote = linked.length ? ` Dabei werden auch ${linked.length} zugehörige Buchung${linked.length === 1 ? '' : 'en'} gelöscht.` : '';
+  if (!confirm(`Projekt „${project.name}“ wirklich löschen?${bookingNote} Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
   try {
-    if (settings().cloudMode) await sendCloudAction({action:'deleteProject',payload:{projectId}});
-    const local = readJson(LOCAL_PROJECTS_KEY, []).filter(item => item.id !== projectId);
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(local));
+    if (settings().cloudMode) await sendCloudJsonpAction('deleteProject',{projectId});
     $('#projectDetailDialog').close();
     await refreshCatalog(); render(); showPage('projectsPage'); toast('Projekt gelöscht.');
   } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
@@ -1040,12 +1031,30 @@ function openProjectDialog(projectId = '') {
   $('#projectDialog').showModal();
 }
 function projectNameCode(name) {
-  const clean = String(name || 'PRJ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return (clean.slice(0,3) || 'PRJ').padEnd(3,'X');
+  const words = String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .match(/[A-Z0-9]+/g) || [];
+
+  const code = [];
+  for (const word of words) {
+    if (code.length >= 3) break;
+    code.push(/^\d+$/.test(word) ? word.slice(0, 1) : word.charAt(0));
+  }
+
+  // Bei kurzen Namen mit nur ein oder zwei Wörtern werden weitere Buchstaben
+  // aus dem Projektnamen ergänzt, damit das Kürzel immer drei Zeichen hat.
+  const remaining = words.join('').replace(/[^A-Z0-9]/g, '');
+  for (const character of remaining) {
+    if (code.length >= 3) break;
+    if (!code.includes(character) || remaining.length < 3) code.push(character);
+  }
+  return (code.join('').slice(0, 3) || 'PRJ').padEnd(3, 'X');
 }
 function projectDateCode(date) {
   const [year, month, day] = String(date || todayIso()).split('-');
-  return `${month}${day}${String(year).slice(-2)}`;
+  return `${day}${month}${String(year).slice(-2)}`;
 }
 function nextProjectNumber(name, start) {
   const base = `CME-${projectNameCode(name)}-${projectDateCode(start)}`;
@@ -1067,8 +1076,7 @@ async function submitProject(event) {
   const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-  if(settings().cloudMode) await sendCloudAction({action:'saveProject',payload:project});
-  const local=readJson(LOCAL_PROJECTS_KEY,[]).filter(p=>p.id!==project.id); local.push(project); localStorage.setItem(LOCAL_PROJECTS_KEY,JSON.stringify(local));
+  if(settings().cloudMode) await sendCloudJsonpAction('saveProject',project);
   await refreshCatalog(); render(); $('#projectDialog').close(); showPage('projectsPage'); openProjectDetail(project.id); toast('Projekt gespeichert.');
 }
 function projectReservations(projectId) { return reservations.filter(r=>r.projectId===projectId && r.status!=='Storniert'); }
@@ -1227,10 +1235,7 @@ async function submitReservation(event) {
   if (r.to < r.from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   const available = availableFor(r.productId, r.from, r.to, r.id);
   if (r.quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
-  if (settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:r});
-  const local = readJson(LOCAL_RESERVATIONS_KEY,[]).filter(x=>x.id!==r.id);
-  local.push(r);
-  localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
+  if (settings().cloudMode) await sendCloudJsonpAction('saveReservation',r);
   await refreshCatalog();
   render();
   $('#reservationDialog').close();
@@ -1253,10 +1258,7 @@ async function removeReservationFromProject() {
   if (!confirm(`${product?.name || reservation.productId} wirklich aus diesem Projekt entfernen?`)) return;
   const cancelled = normalizeReservation({...reservation, status:'Storniert'});
   try {
-    if (settings().cloudMode) await sendCloudAction({action:'saveReservation', payload:cancelled});
-    const local = readJson(LOCAL_RESERVATIONS_KEY, []).filter(item => item.id !== cancelled.id);
-    local.push(cancelled);
-    localStorage.setItem(LOCAL_RESERVATIONS_KEY, JSON.stringify(local));
+    if (settings().cloudMode) await sendCloudJsonpAction('saveReservation',cancelled);
     await refreshCatalog();
     render();
     $('#reservationDialog').close();
@@ -1278,9 +1280,10 @@ function renderAdminProducts() {
     return `<div class="admin-product-row">
       ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">` : '<div class="image-placeholder">Kein Foto</div>'}
       <div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · ${escapeHtml(item.category)} · Bestand ${item.total}</small></div>
-      <button type="button" class="danger" data-delete-product="${escapeHtml(item.id)}">Produkt löschen</button>
+      <div class="admin-row-actions"><button type="button" class="ghost" data-edit-product="${escapeHtml(item.id)}">Bearbeiten</button><button type="button" class="danger" data-delete-product="${escapeHtml(item.id)}">Löschen</button></div>
     </div>`;
   }).join('') : '<div class="empty-state">Keine Produkte vorhanden.</div>';
+  $$('[data-edit-product]').forEach(button => button.onclick = () => openProductDialog(button.dataset.editProduct));
   $$('[data-delete-product]').forEach(button => button.onclick = () => deleteProduct(button.dataset.deleteProduct));
 }
 
@@ -1291,7 +1294,7 @@ async function deleteProduct(productId) {
   if (linked.length) return toast('Dieses Produkt ist noch in aktiven Projekten reserviert und kann deshalb nicht gelöscht werden.');
   if (!confirm(`„${product.name}“ wirklich löschen? Dieser Schritt blendet das Produkt auf allen Geräten aus.`)) return;
   try {
-    if (settings().cloudMode) await sendCloudAction({ action: 'deleteProduct', payload: { productId } });
+    if (settings().cloudMode) await sendCloudJsonpAction('deleteProduct',{productId});
     const deleted = new Set(readJson(LOCAL_DELETED_PRODUCTS_KEY, []).map(id => String(id).toUpperCase()));
     deleted.add(productId.toUpperCase());
     localStorage.setItem(LOCAL_DELETED_PRODUCTS_KEY, JSON.stringify([...deleted]));
@@ -1317,22 +1320,48 @@ function renderCalendar() {
   const relevant=reservations.filter(r=>r.status!=='Storniert'&&rangesOverlap(r.from,r.to,from,to)).sort((a,b)=>a.from.localeCompare(b.from));
   $('#calendarBookings').innerHTML=relevant.length?relevant.map(r=>{const p=projects.find(x=>x.id===r.projectId),item=catalog.find(x=>x.id===r.productId);return `<div class="timeline-item"><div class="timeline-date">${formatDate(r.from)}<br><small>bis ${formatDate(r.to)}</small></div><div><b>${escapeHtml(p?.name||r.projectId)}</b><br>${r.quantity} × ${escapeHtml(item?.name||r.productId)}<br><small>${escapeHtml(r.status)}</small></div></div>`}).join(''):'<div class="empty-state">Keine Buchungen in diesem Zeitraum.</div>';
 }
+function rentalDays(from, to) {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+function euro(value) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+}
 function projectDocumentHtml(projectId) {
-  const p=projects.find(x=>x.id===projectId), rows=projectReservations(projectId);
-  const items=rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<tr><td>${r.quantity}</td><td>${escapeHtml(item?.name||r.productId)}</td><td>${escapeHtml(r.productId)}</td><td>${formatDate(r.from)}–${formatDate(r.to)}</td><td>${escapeHtml(r.status)}</td></tr>`}).join('');
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Equipment ${escapeHtml(p.name)}</title><style>body{font:14px Arial;padding:35px;color:#171716}h1{margin-bottom:4px}small{color:#666}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.sign{margin-top:60px;display:flex;gap:80px}.line{border-top:1px solid;width:220px;padding-top:6px}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><p><b>Zeitraum:</b> ${formatDate(p.start)}–${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact||'–')}<br><b>Status:</b> ${escapeHtml(p.status)}</p><table><thead><tr><th>Menge</th><th>Equipment</th><th>ID</th><th>Zeitraum</th><th>Status</th></tr></thead><tbody>${items||'<tr><td colspan="5">Kein Equipment</td></tr>'}</tbody></table><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div></body></html>`;
+  const p = projects.find(x => x.id === projectId);
+  if (!p) throw new Error('Projekt nicht gefunden.');
+  const rows = projectReservations(projectId);
+  let grandTotal = 0;
+  const items = rows.map(r => {
+    const item = catalog.find(x => x.id === r.productId);
+    const days = rentalDays(r.from, r.to);
+    const unitPrice = Number(item?.dailyPrice || 0);
+    const lineTotal = unitPrice * Number(r.quantity || 0) * days;
+    grandTotal += lineTotal;
+    return `<tr>
+      <td>${escapeHtml(r.productId)}</td>
+      <td><b>${escapeHtml(item?.name || r.productId)}</b><br><small>Gesamtbestand: ${Number(item?.total || 0)}</small></td>
+      <td>${Number(r.quantity || 0)}</td>
+      <td>${formatDate(r.from)} – ${formatDate(r.to)}<br><small>${days} Tag${days === 1 ? '' : 'e'}</small></td>
+      <td>${euro(unitPrice)}</td>
+      <td>${euro(lineTotal)}</td>
+    </tr>`;
+  }).join('');
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipment ${escapeHtml(p.name)}</title><style>
+    *{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1100px;margin:auto}h1{margin:8px 0 4px}h2{margin:0 0 16px}.project-number{font-weight:700;letter-spacing:.05em}.meta{line-height:1.7;margin:18px 0}.table-wrap{width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:24px;min-width:780px}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em}small{color:#666}.total{margin:20px 0 0 auto;width:min(340px,100%);display:flex;justify-content:space-between;border-top:2px solid #171716;padding-top:12px;font-size:18px}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media(max-width:700px){body{padding:18px}.sign{gap:30px}.line{width:50%}}@media print{body{padding:0}.table-wrap{overflow:visible}table{min-width:0}.no-print{display:none}}
+  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Preis / Tag</th><th>Mietpreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 function printProjectDocument(projectId) {
-  const printArea = $('#printArea');
-  const html = projectDocumentHtml(projectId);
-  const bodyMatch = html.match(/<body>([\s\S]*)<\/body>/i);
-  printArea.innerHTML = bodyMatch ? bodyMatch[1] : html;
-  printArea.setAttribute('aria-hidden', 'false');
-  setTimeout(() => window.print(), 80);
-  setTimeout(() => {
-    printArea.innerHTML = '';
-    printArea.setAttribute('aria-hidden', 'true');
-  }, 1200);
+  let html;
+  try { html = projectDocumentHtml(projectId); }
+  catch (error) { return toast(error.message || 'Beleg konnte nicht erstellt werden.'); }
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return toast('Bitte Pop-ups erlauben, damit die Belegübersicht geöffnet werden kann.');
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
 }
 async function emailProjectDocument(projectId) {
   const p=projects.find(x=>x.id===projectId); if(!p?.email1)return toast('Keine E-Mail-Adresse hinterlegt.');
