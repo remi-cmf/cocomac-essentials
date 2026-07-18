@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <meta name="theme-color" content="#161616">
+
+  <title>Cocomac Essential</title>
+
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <div>
+      <small>COCOMAC ESSENTIAL</small>
+      <h1>Equipment</h1>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="installBtn" class="ghost hidden">Installieren</button>
+      <button id="menuBtn" class="menu-button" type="button" aria-label="Menü öffnen" aria-expanded="false">☰</button>
+      <div id="mainMenu" class="main-menu hidden" role="menu">
+        <button type="button" class="menu-nav active" data-page="equipmentPage">Equipment</button>
+        <button type="button" class="menu-nav" data-page="projectsPage">Projekte</button>
+        <button type="button" class="menu-nav" data-page="calendarPage">Kalender</button>
+        <button type="button" class="menu-nav" data-page="adminPage">Administration</button>
+        <hr>
+        <button type="button" id="menuSettingsBtn">Einstellungen</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="syncBanner" class="banner">
+      Synchronisierung wird verbunden …
+    </section>
+
+
+
+    <section id="equipmentPage" class="app-page active">
+    <section class="stats" id="stats"></section>
+
+    <section class="toolbar">
+      <input
+        id="search"
+        type="search"
+        placeholder="Artikel, ID oder Kategorie suchen">
+
+
+      <button id="scanBtn">
+        QR scannen
+      </button>
+
+    </section>
+
+    <section id="list" class="grid"></section>
+    </section>
+
+    <section id="projectsPage" class="app-page hidden">
+      <div class="page-heading">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Projekte</h2></div>
+        <button id="addProjectBtn" type="button">+ Neues Projekt</button>
+      </div>
+      <section id="projectStats" class="stats"></section>
+      <section id="projectList" class="project-grid"></section>
+    </section>
+
+    <section id="calendarPage" class="app-page hidden">
+      <div class="page-heading"><div><small>COCOMAC ESSENTIAL</small><h2>Verfügbarkeit</h2></div></div>
+      <div class="calendar-filter">
+        <label>Von<input id="calendarFrom" type="date"></label>
+        <label>Bis<input id="calendarTo" type="date"></label>
+        <button id="refreshCalendarBtn" type="button">Zeitraum prüfen</button>
+      </div>
+      <div id="calendarSummary"></div>
+      <div id="availabilityList" class="availability-list"></div>
+      <h3 class="section-title">Buchungen im Zeitraum</h3>
+      <div id="calendarBookings" class="timeline"></div>
+    </section>
+
+    <section id="adminPage" class="app-page hidden">
+      <div class="page-heading">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Administration</h2></div>
+        <button id="adminAddProductBtn" type="button">+ Neues Produkt</button>
+      </div>
+      <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
+      <section class="admin-section">
+        <h3>Produkte verwalten</h3>
+        <div id="adminProductList" class="admin-product-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <!-- Detailansicht -->
+  <dialog id="detailDialog">
+    <button
+      type="button"
+      class="close"
+      data-close
+      aria-label="Zurück">
+      ←
+    </button>
+
+    <div id="detailContent"></div>
+  </dialog>
+
+  <!-- QR-Code eines Artikels anzeigen -->
+  <dialog id="qrDialog">
+    <button
+      type="button"
+      class="close"
+      data-close
+      aria-label="Zurück">
+      ←
+    </button>
+
+    <div class="qr-panel">
+      <small>COCOMAC ESSENTIAL</small>
+
+      <h2 id="qrTitle">
+        QR-Code
+      </h2>
+
+      <div
+        id="qrImageWrap"
+        class="qr-image-wrap">
+      </div>
+
+      <strong
+        id="qrArticleId"
+        class="qr-article-id">
+      </strong>
+
+      <p class="qr-hint">Der QR-Code enthält den vollständigen Link zum Produkt.</p>
+      <a id="qrProductLink" class="qr-product-link" href="#" target="_blank" rel="noopener"></a>
+
+      <div class="qr-actions">
+        <button
+          type="button"
+          id="downloadQrBtn">
+          QR-Code laden
+        </button>
+
+        <button
+          type="button"
+          id="printQrBtn"
+          class="ghost">
+          Drucken
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Projektbezogene Aktionen -->
+  <dialog id="actionDialog" class="reservation-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="actionForm">
+      <small>COCOMAC ESSENTIAL</small>
+      <h2 id="actionTitle">Buchung</h2>
+      <p id="actionHelp" class="dialog-intro"></p>
+      <input type="hidden" id="actionArticleId">
+      <input type="hidden" id="actionType">
+      <label>Projekt<select id="actionProject" required></select></label>
+      <div id="actionProjectInfo" class="reservation-project-info"></div>
+      <div class="form-grid two-columns">
+        <label>Von<input id="actionFrom" type="date" required></label>
+        <label>Bis<input id="actionTo" type="date" required></label>
+      </div>
+      <div id="actionAvailability" class="reservation-availability"></div>
+      <label>Menge<input id="quantity" type="number" min="1" value="1" required></label>
+      <label>Notiz<textarea id="note" placeholder="Optional"></textarea></label>
+      <button id="actionSubmitBtn" type="submit">Speichern</button>
+    </form>
+  </dialog>
+
+  <!-- Einstellungen -->
+  <dialog id="settingsDialog">
+    <button
+      type="button"
+      class="close"
+      data-close
+      aria-label="Zurück">
+      ←
+    </button>
+
+    <form id="settingsForm">
+      <h2>
+        Verbindung
+      </h2>
+
+      <p>
+        Trage die URL deiner veröffentlichten Google-Apps-Script-Web-App ein.
+        Sie muss mit <b>/exec</b> enden.
+      </p>
+
+      <label>
+        Backend-URL
+
+        <input
+          id="apiUrl"
+          type="text"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://script.google.com/macros/s/.../exec">
+      </label>
+
+      <label class="inline">
+        <input
+          id="cloudMode"
+          type="checkbox">
+
+        Synchronisierung über Google Sheets aktiv
+      </label>
+
+      <button type="submit">
+        Speichern und testen
+      </button>
+
+      <button
+        type="button"
+        id="resetDemo"
+        class="danger">
+        Lokale Testdaten zurücksetzen
+      </button>
+    </form>
+  </dialog>
+
+
+  <!-- Neues Produkt -->
+  <dialog id="productDialog" class="product-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="productForm">
+      <input id="productEditId" type="hidden">
+      <div>
+        <small>COCOMAC ESSENTIAL</small>
+        <h2 id="productDialogTitle">Neues Produkt</h2>
+        <p id="newProductIdPreview" class="meta">Die Artikel-ID wird automatisch erzeugt.</p>
+      </div>
+
+      <label>Foto
+        <input id="productImage" type="file" accept="image/*" class="visually-hidden">
+        <div id="productImageDropzone" class="image-dropzone" tabindex="0">
+          <div id="productImagePreview" class="image-preview"><span>Foto hier ablegen oder auswählen</span></div>
+          <strong>Datei auswählen</strong>
+          <small>Am Handy kannst du Fotomediathek, Dateien oder Kamera wählen.</small>
+        </div>
+      </label>
+
+      <div class="form-columns">
+        <label>Name<input id="productName" required placeholder="z. B. Wasserkocher"></label>
+        <label>Kategorie
+          <select id="productCategory" required>
+            <option value="">Kategorie auswählen</option>
+          </select>
+        </label>
+        <label>Standort<input id="productLocation" required placeholder="z. B. Keller"></label>
+        <label>Menge<input id="productTotal" type="number" min="1" value="1" required></label>
+        <label>Zustand<select id="productCondition"><option>Sehr gut</option><option selected>Gut</option><option>Gebraucht</option><option>Reparatur nötig</option></select></label>
+        <label>Maße<input id="productDimensions" placeholder="optional"></label>
+        <label>Tagespreis / Mietpreis in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Anschaffungspreis in €<input id="productPurchasePrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Wiederbeschaffung in €<input id="productReplacementValue" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Gewicht<input id="productWeight" placeholder="z. B. 4,2 kg"></label>
+        <label>Hersteller<input id="productManufacturer" placeholder="optional"></label>
+        <label>Seriennummer<input id="productSerialNumber" placeholder="optional"></label>
+        <label>Kaufdatum<input id="productPurchaseDate" type="date"></label>
+      </div>
+      <label>Beschreibung<textarea id="productDescription" placeholder="optional"></textarea></label>
+      <label>Notiz<textarea id="productNotes" placeholder="optional"></textarea></label>
+      <button id="saveProductBtn" type="submit">Produkt speichern</button>
+    </form>
+  </dialog>
+
+  <!-- Neues Projekt -->
+  <dialog id="projectDialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="projectForm">
+      <input id="projectEditId" type="hidden">
+      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2>
+      <div class="form-columns">
+        <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
+        <label>Projektnummer<div id="projectNumberPreview" class="generated-number">Wird automatisch erzeugt</div></label>
+        <label>Ansprechpartner<input id="projectContact" placeholder="optional"></label>
+        <label>E-Mail 1<input id="projectEmail1" type="email" placeholder="optional"></label>
+        <label>E-Mail 2<input id="projectEmail2" type="email" placeholder="optional"></label>
+        <label>Status<select id="projectStatus"><option>Entwurf</option><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Abgeschlossen</option></select></label>
+        <label>Start<input id="projectStart" type="date" required></label>
+        <label>Ende<input id="projectEnd" type="date" required></label>
+      </div>
+      <label>Notiz<textarea id="projectNotes" placeholder="optional"></textarea></label>
+      <button id="projectSubmitBtn" type="submit">Projekt speichern</button>
+    </form>
+  </dialog>
+
+  <!-- Projektdetails -->
+  <dialog id="projectDetailDialog" class="wide-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <div id="projectDetailContent"></div>
+  </dialog>
+
+  <!-- Equipment einem Projekt zuordnen -->
+  <dialog id="reservationDialog" class="reservation-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="reservationForm">
+      <small>COCOMAC ESSENTIAL</small>
+      <h2 id="reservationDialogTitle">Equipment hinzufügen</h2>
+      <p class="dialog-intro">Wähle zuerst das Projekt. Zeitraum und Ansprechpartner werden automatisch übernommen.</p>
+
+      <input id="reservationProjectId" type="hidden">
+      <input id="reservationEditId" type="hidden">
+      <label>Projekt<select id="reservationProject" required></select></label>
+      <div id="reservationProjectInfo" class="reservation-project-info"></div>
+
+      <label>Produkt<select id="reservationProduct" required></select></label>
+      <div id="reservationAvailability" class="availability-note"></div>
+
+      <div class="form-columns">
+        <label>Menge<input id="reservationQuantity" type="number" min="1" value="1" required></label>
+        <label>Status<select id="reservationStatus"><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Storniert</option></select></label>
+        <label>Von<input id="reservationFrom" type="date" required></label>
+        <label>Bis<input id="reservationTo" type="date" required></label>
+      </div>
+      <label>Notiz<textarea id="reservationNote" placeholder="z. B. Abholung durch Martin"></textarea></label>
+      <div class="reservation-form-actions"><button id="reservationSubmitBtn" type="submit">Equipment hinzufügen</button><button id="deleteReservationBtn" type="button" class="danger hidden">Aus Projekt entfernen</button></div>
+    </form>
+  </dialog>
+
+  <!-- QR-Scanner -->
+  <dialog id="scanDialog">
+    <button
+      type="button"
+      class="close"
+      data-close
+      aria-label="Zurück">
+      ←
+    </button>
+
+    <h2>
+      QR-Code scannen
+    </h2>
+
+    <p>
+      Halte den QR-Code innerhalb des Kamerabildes. Beim ersten Start musst du
+      den Zugriff auf die Kamera erlauben.
+    </p>
+
+    <div id="qrReader"></div>
+
+    <p
+      id="scannerStatus"
+      class="meta">
+    </p>
+
+    <button
+      type="button"
+      id="cameraScanBtn">
+      Kamera starten
+    </button>
+
+    <button
+      type="button"
+      id="stopScannerBtn"
+      class="ghost hidden">
+      Kamera stoppen
+    </button>
+
+    <hr>
+
+    <form id="manualScanForm">
+      <label>
+        Artikel-ID manuell eingeben
+
+        <input
+          id="manualId"
+          placeholder="CME-KIT-001"
+          autocomplete="off"
+          required>
+      </label>
+
+      <button type="submit">
+        Artikel öffnen
+      </button>
+    </form>
+  </dialog>
+
+  <div
+    id="toast"
+    class="toast hidden">
+  </div>
+  <section id="printArea" class="print-area" aria-hidden="true"></section>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="./app.js?v=21" type="module"></script>
+</body>
+</html>

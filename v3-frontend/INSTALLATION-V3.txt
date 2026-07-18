@@ -1,0 +1,12 @@
+COCOMAC ESSENTIALS V3
+
+1. Alle Dateien aus diesem Ordner in das GitHub-Repository hochladen und vorhandene Dateien ersetzen.
+2. Nach dem GitHub-Pages-Deployment die Seite auf dem Mac mit Cmd + Shift + R neu laden.
+3. Auf dem iPhone die App vollständig schließen und erneut öffnen. Bei alter Darstellung die Home-Bildschirm-App löschen und über die GitHub-Pages-Adresse neu hinzufügen.
+
+Neu in V3:
+- ausschließlich vertikales Scrollen
+- Kalenderbereiche mittig ausgerichtet
+- vollständige Belegübersicht mit Bestand, Artikelnummer, Zeitraum und Mietpreis
+- Projektnummern CME-KÜRZEL-DDMMYY-001
+- Projektlöschung entfernt auch zugehörige Buchungen

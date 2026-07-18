@@ -1,0 +1,15 @@
+COCOMAC ESSENTIALS V2
+
+1. Zuerst Code.gs im Google Apps Script vollständig ersetzen.
+2. Im Apps Script einmal die Funktion setupCocomacEssentials ausführen.
+3. Danach: Bereitstellen > Bereitstellungen verwalten > Bearbeiten > Neue Version > Bereitstellen.
+4. Anschließend alle Frontend-Dateien in GitHub ersetzen.
+5. Auf Mac und iPhone die App vollständig schließen und neu öffnen.
+
+DATENQUELLE
+Die App verwendet ab dieser Version ausschließlich die Tabellenblätter Produkte, Projekte und Reservierungen.
+Wenn Produkte leer ist, werden vorhandene Daten einmalig aus Equipment Import, Equipment oder Liste übernommen.
+Danach Produkte bitte bevorzugt in der Administration der App bearbeiten.
+
+PROJEKT LÖSCHEN
+Beim Löschen eines Projekts werden die zugehörigen Reservierungen ebenfalls gelöscht.

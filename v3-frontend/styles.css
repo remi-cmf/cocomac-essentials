@@ -1,0 +1,128 @@
+
+:root{--ink:#171716;--paper:#f4f1e8;--card:#fff;--line:#d8d4c8;--muted:#6d6a61;--ok:#1f6b4b;--bad:#9b2d2d}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select,textarea{font:inherit}.topbar{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:18px max(18px,env(safe-area-inset-left));background:rgba(244,241,232,.94);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+h1,h2,h3,p{margin-top:0}.topbar h1{margin:2px 0 0}.topbar small{letter-spacing:.15em;color:var(--muted)}
+main{max-width:1100px;margin:auto;padding:18px}.banner{padding:12px 15px;border-radius:14px;margin-bottom:14px;background:#e6efe9;color:var(--ok)}.banner.demo{background:#efe8d5;color:#72590d}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:15px}.stat strong{display:block;font-size:28px}.stat span{font-size:12px;color:var(--muted)}
+.toolbar{display:grid;grid-template-columns:1fr auto auto;gap:10px;margin-bottom:16px}input,select,textarea{width:100%;border:1px solid var(--line);border-radius:14px;padding:13px;background:var(--card)}button{border:0;border-radius:14px;padding:13px 16px;background:var(--ink);color:white;font-weight:700;cursor:pointer}.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}.danger{background:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;cursor:pointer}.card img{width:100%;height:190px;object-fit:contain;background:white}.card-body{padding:14px}.card h3{margin-bottom:5px}.meta{color:var(--muted);font-size:13px}.pill{display:inline-block;margin-top:10px;padding:6px 9px;border-radius:999px;background:#e4efe8;color:var(--ok);font-size:12px;font-weight:700}
+dialog{width:min(620px,calc(100% - 24px));border:0;border-radius:24px;padding:22px;background:var(--paper);box-shadow:0 20px 70px #0005}dialog::backdrop{background:#0008}.close{float:right;padding:8px 12px;background:transparent;color:var(--ink);font-size:28px}.hero{width:100%;height:290px;object-fit:contain;background:#fff;border-radius:18px}.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0}.detail-stat{padding:12px;background:#fff;border-radius:14px;text-align:center}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+form{display:grid;gap:12px}label{display:grid;gap:6px;font-size:13px;color:var(--muted)}label.inline{display:flex;align-items:center;gap:8px}label.inline input{width:auto}.toast{position:fixed;left:16px;right:16px;bottom:20px;max-width:640px;margin:auto;padding:14px 16px;border-radius:14px;background:var(--ink);color:white;z-index:20}.hidden{display:none!important}#scanVideo{width:100%;border-radius:16px;margin:10px 0}
+@media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.grid{grid-template-columns:1fr}.card{display:grid;grid-template-columns:115px 1fr}.card img{height:100%;min-height:130px}.actions{grid-template-columns:1fr}.topbar{padding-top:max(18px,env(safe-area-inset-top))}}
+
+.qr-button{grid-column:1/-1}.qr-panel{text-align:center}.qr-panel small{letter-spacing:.15em;color:var(--muted)}.qr-image-wrap{display:flex;justify-content:center;margin:18px 0 10px}.qr-image-wrap img{width:min(300px,75vw);height:auto;background:#fff;padding:16px;border-radius:18px;image-rendering:pixelated}.qr-article-id{display:block;font-size:22px;letter-spacing:.08em}.qr-hint{margin:14px auto;color:var(--muted);font-size:13px;max-width:480px}.qr-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}@media(max-width:650px){.qr-actions{grid-template-columns:1fr}}
+
+
+/* Produktverwaltung */
+.toolbar{grid-template-columns:1fr auto auto auto}.add-product{background:var(--ok)}
+.card-image-wrap{height:190px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.card-image-wrap img{width:100%;height:100%;object-fit:contain}.image-placeholder{color:var(--muted);font-size:13px}
+.product-dialog small{letter-spacing:.08em;color:var(--muted)}.form-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.image-dropzone{border:2px dashed var(--line);border-radius:18px;padding:14px;text-align:center;background:#fff;cursor:pointer;transition:.15s}
+.image-dropzone.dragover{border-color:var(--ok);background:#edf5f0}.image-dropzone strong,.image-dropzone small{display:block;margin-top:8px}
+.image-preview{height:210px;border-radius:14px;background:#f4f1e8;display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted)}
+.image-preview img{width:100%;height:100%;object-fit:contain;background:#fff}.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important}
+.qr-product-link{display:block;font-size:11px;color:var(--muted);word-break:break-all;margin:8px auto 14px;max-width:470px}
+#qrReader{width:100%;margin:14px 0;overflow:hidden;border-radius:16px;background:#000}#qrReader video{width:100%!important;border-radius:16px}#scannerStatus{min-height:22px}
+@media(max-width:650px){.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.add-product{grid-column:1/-1}.card{grid-template-columns:135px 1fr}.card-image-wrap{height:160px}.card-image-wrap img{height:100%;min-height:0}.form-columns{grid-template-columns:1fr}.image-preview{height:180px}}
+
+
+/* Einheitlich zentrierte Produktbilder */
+.card-image-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+.card-image-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center center;
+}
+.hero {
+  display: block;
+  object-fit: contain;
+  object-position: center center;
+}
+
+
+/* Projekte und Kalender */
+.app-nav{display:flex;gap:8px;margin:0 0 16px;overflow:auto}.nav-btn{white-space:nowrap}.nav-btn.active{background:var(--ink);color:#fff}.page-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 16px}.page-heading h2{margin:2px 0 0}.page-heading small{color:var(--muted);letter-spacing:.12em}.project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}.project-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:17px;cursor:pointer}.project-card:hover{transform:translateY(-1px)}.project-card-head{display:flex;justify-content:space-between;align-items:center}.project-card h3{margin:14px 0 6px}.project-card p{margin-bottom:8px}.status-badge{display:inline-block;border-radius:999px;background:#e6efe9;color:var(--ok);padding:5px 9px;font-size:11px;font-weight:750}.wide-dialog{width:min(850px,calc(100% - 24px))}.project-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}.project-meta-grid>div{background:#fff;padding:13px;border-radius:14px}.project-actions{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}.booking-table{display:grid;gap:8px}.booking-row{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.empty-state{padding:22px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);text-align:center}.availability-note{background:#fff;border-radius:14px;padding:12px;color:var(--ok)}.calendar-filter{display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:10px;margin-bottom:14px}.availability-list{display:grid;gap:7px}.availability-row{display:grid;grid-template-columns:1fr 80px 80px;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:15px;padding:12px}.availability-count{text-align:center;padding:7px;border-radius:12px;background:#edf5f0;color:var(--ok)}.availability-count.none{background:#f7e5e5;color:var(--bad)}.availability-count b,.availability-count small{display:block}.section-title{margin-top:26px}.timeline{display:grid;gap:8px}.timeline-item{display:grid;grid-template-columns:120px 1fr;gap:14px;background:#fff;border-left:5px solid var(--ink);border-radius:12px;padding:13px}.timeline-date{font-weight:700}.timeline-date small{font-weight:400;color:var(--muted)}
+@media(max-width:650px){.page-heading{align-items:flex-start}.project-grid{grid-template-columns:1fr}.project-meta-grid{grid-template-columns:1fr}.calendar-filter{grid-template-columns:1fr 1fr}.calendar-filter button{grid-column:1/-1}.availability-row{grid-template-columns:1fr 62px 62px}.timeline-item{grid-template-columns:95px 1fr}.project-actions{display:grid}.project-actions button{width:100%}}
+
+/* Verbesserter Ausleih- und Projektablauf */
+.reservation-dialog{width:min(720px,calc(100% - 24px))}
+.dialog-intro{color:var(--muted);margin-top:-4px}
+.reservation-project-info{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0 14px}
+.reservation-project-info>b{display:block;margin-bottom:3px}
+.reservation-project-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.reservation-project-head div{display:grid;gap:3px}
+.reservation-project-head small,.reservation-project-grid small,.reservation-product-summary small{color:var(--muted);font-weight:500}
+.reservation-project-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.reservation-project-grid>div{display:grid;gap:3px;background:var(--paper);border-radius:12px;padding:10px;min-width:0}
+.reservation-project-grid b{overflow-wrap:anywhere}
+.reservation-product-summary{display:grid;grid-template-columns:64px 1fr 66px;align-items:center;gap:12px;margin-bottom:7px}
+.reservation-product-summary img{width:64px;height:64px;object-fit:contain;object-position:center;background:var(--paper);border-radius:12px}
+.reservation-product-summary>div:nth-child(2){display:grid;gap:2px;min-width:0}
+.reservation-product-summary span{font-size:12px;color:var(--muted)}
+.reservation-free{background:#edf5f0;color:var(--ok);border-radius:13px;text-align:center;padding:8px}
+.reservation-free b,.reservation-free small{display:block}
+.reservation-free b{font-size:22px}
+.reservation-free.availability-danger{background:#f7e5e5;color:var(--bad)}
+#reservationSubmitBtn:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:650px){.reservation-project-grid{grid-template-columns:1fr}.reservation-product-summary{grid-template-columns:54px 1fr 58px}.reservation-product-summary img{width:54px;height:54px}}
+
+
+/* Administration, Navigation und Drucken */
+.close{float:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-4px 0 10px -4px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:24px;line-height:1}
+.admin-intro{padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:16px;color:var(--muted);margin-bottom:18px}
+.admin-section{margin-top:18px}.admin-product-list{display:grid;gap:9px}.admin-product-row{display:grid;grid-template-columns:64px 1fr auto;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px}.admin-product-row img{width:64px;height:64px;object-fit:contain;object-position:center;background:var(--paper);border-radius:12px}.admin-product-row .danger{padding:10px 12px}.generated-number{min-height:46px;display:flex;align-items:center;padding:13px;background:#fff;border:1px solid var(--line);border-radius:14px;color:var(--ink);font-weight:750;letter-spacing:.04em}.toolbar{grid-template-columns:1fr auto auto}.print-area{display:none}
+@media(max-width:650px){.admin-product-row{grid-template-columns:54px 1fr}.admin-product-row img{width:54px;height:54px}.admin-product-row .danger{grid-column:1/-1}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;background:#fff;color:#000;padding:24px;font:14px Arial}#printArea table{width:100%;border-collapse:collapse;margin-top:24px}#printArea th,#printArea td{padding:10px;border-bottom:1px solid #ddd;text-align:left}#printArea .sign{margin-top:60px;display:flex;gap:80px}#printArea .line{border-top:1px solid;width:220px;padding-top:6px}}
+
+.pill-danger{background:#ffe7e4;color:#9d2118;border-color:#f2b5ae}
+
+/* Oberes Hauptmenü */
+.topbar-actions{position:relative;display:flex;align-items:center;gap:8px}
+.menu-button{width:44px;height:44px;padding:0;border-radius:14px;font-size:22px;line-height:1}
+.main-menu{position:absolute;right:0;top:calc(100% + 10px);z-index:30;width:min(280px,calc(100vw - 28px));padding:9px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.16)}
+.main-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);border:0;padding:12px 13px;border-radius:12px}
+.main-menu button:hover,.main-menu button.active{background:#efede6}
+.main-menu button.active{font-weight:800}
+.main-menu hr{border:0;border-top:1px solid var(--line);margin:7px 0}
+@media(max-width:650px){.topbar small{font-size:10px}.topbar h1{font-size:22px}.menu-button{width:42px;height:42px}}
+
+.booking-row-button{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}.booking-row-button:hover{border-color:var(--ink);transform:translateY(-1px)}.booking-row-side{display:grid;justify-items:end;gap:5px}.booking-row-side small{color:var(--muted)}.reservation-form-actions{display:flex;flex-wrap:wrap;gap:9px}.reservation-form-actions button{flex:1 1 220px}
+.admin-row-actions { display:flex; gap:.55rem; flex-wrap:wrap; justify-content:flex-end; }
+.admin-product-row .admin-row-actions button { width:auto; }
+
+
+/* V3: ausschließlich vertikales Scrollen und stabile mobile Breiten */
+html,body{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y}
+body{position:relative}
+img,svg,video,canvas,iframe{max-width:100%}
+input,select,textarea,button{max-width:100%;min-width:0}
+.app-page,main,section,article,dialog,.topbar,.page-heading,.toolbar,.grid,.project-grid,.booking-table,.calendar-filter,.availability-list,.timeline{max-width:100%;min-width:0}
+.app-nav{overflow:visible;flex-wrap:wrap}
+.page-heading>*{min-width:0}
+.project-card-head,.booking-row,.reservation-project-head{min-width:0}
+.project-card-head small,.booking-row div,.timeline-item div,.availability-row div{min-width:0;overflow-wrap:anywhere}
+
+/* Kalender: Produktbalken mittig und auf allen Geräten gleich breit */
+#calendarSummary,#availabilityList,#calendarBookings,.calendar-filter,.section-title{width:min(920px,100%);margin-left:auto;margin-right:auto}
+.availability-row{width:100%;margin:0 auto}
+.availability-row>div:first-child{text-align:left}
+.availability-count{justify-self:center;width:100%;max-width:80px}
+.timeline-item{width:100%;margin:0 auto}
+
+@media(max-width:650px){
+  .availability-row{grid-template-columns:minmax(0,1fr) 58px 58px;gap:7px;padding:11px 9px}
+  .availability-count{max-width:58px;padding:7px 3px}
+  .timeline-item{grid-template-columns:82px minmax(0,1fr);gap:10px}
+  dialog{max-width:calc(100vw - 16px)!important;margin-left:auto;margin-right:auto}
+}
