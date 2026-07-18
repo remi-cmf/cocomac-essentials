@@ -12,3 +12,42 @@ form{display:grid;gap:12px}label{display:grid;gap:6px;font-size:13px;color:var(-
 @media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.grid{grid-template-columns:1fr}.card{display:grid;grid-template-columns:115px 1fr}.card img{height:100%;min-height:130px}.actions{grid-template-columns:1fr}.topbar{padding-top:max(18px,env(safe-area-inset-top))}}
 
 .qr-button{grid-column:1/-1}.qr-panel{text-align:center}.qr-panel small{letter-spacing:.15em;color:var(--muted)}.qr-image-wrap{display:flex;justify-content:center;margin:18px 0 10px}.qr-image-wrap img{width:min(300px,75vw);height:auto;background:#fff;padding:16px;border-radius:18px;image-rendering:pixelated}.qr-article-id{display:block;font-size:22px;letter-spacing:.08em}.qr-hint{margin:14px auto;color:var(--muted);font-size:13px;max-width:480px}.qr-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}@media(max-width:650px){.qr-actions{grid-template-columns:1fr}}
+
+/* QR-Scanner */
+#qrReader {
+  width: 100%;
+  margin: 14px 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #000;
+}
+
+#qrReader video {
+  width: 100% !important;
+  border-radius: 16px;
+}
+
+#qrReader img {
+  display: none;
+}
+
+#qrReader__scan_region {
+  background: #000;
+}
+
+#qrReader__dashboard {
+  padding: 10px !important;
+  background: var(--card, #fff);
+}
+
+#scannerStatus {
+  min-height: 20px;
+  margin: 8px 0 12px;
+}
+
+#scanDialog hr {
+  width: 100%;
+  margin: 20px 0;
+  border: 0;
+  border-top: 1px solid var(--line, #ddd);
+}
