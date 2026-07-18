@@ -1,0 +1,12 @@
+COCOMAC ESSENTIALS V4 – GOOGLE-DRIVE-BILDER
+
+1. Inhalt dieses Ordners vollständig in das GitHub-Repository hochladen.
+2. Vorhandene Dateien ersetzen.
+3. Auf dem Mac mit Cmd + Shift + R neu laden.
+4. Auf dem iPhone die App vollständig schließen und erneut öffnen.
+
+NEU:
+- Fest verbundener Produktbilder-Ordner in Google Drive.
+- Bestehende Bilder können im Adminbereich automatisch zugeordnet werden.
+- Beim Bearbeiten eines Produkts kann ein vorhandenes Drive-Bild ausgewählt werden.
+- Neu hochgeladene Produktbilder landen automatisch im festgelegten Drive-Ordner.

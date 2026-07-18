@@ -19,6 +19,7 @@ let html5QrCode = null;
 let scannerRunning = false;
 let scanResultHandled = false;
 let selectedProductImage = null;
+let imageLibrary = [];
 let projects = [];
 let reservations = [];
 let activeProjectId = null;
@@ -83,6 +84,7 @@ async function refreshCatalog() {
   catalog = (snapshot.products || []).map(normalizeProduct);
   projects = (snapshot.projects || []).map(normalizeProject).sort((a,b) => String(b.start).localeCompare(String(a.start)));
   reservations = (snapshot.reservations || []).map(normalizeReservation);
+  imageLibrary = Array.isArray(snapshot.images) ? snapshot.images : [];
 
   // Alte Testdaten dürfen die zentrale Datenbank nicht mehr überschreiben.
   localStorage.removeItem(LOCAL_PRODUCTS_KEY);
@@ -498,12 +500,24 @@ function populateCategoryOptions() {
   }
 }
 
+function populateDriveImageOptions(selectedUrl = '') {
+  const select = $('#productDriveImage');
+  if (!select) return;
+  const options = ['<option value="">Kein anderes Drive-Bild auswählen</option>'];
+  imageLibrary.forEach(image => {
+    const selected = selectedUrl && image.url === selectedUrl ? ' selected' : '';
+    options.push(`<option value="${escapeHtml(image.url)}" data-name="${escapeHtml(image.name)}"${selected}>${escapeHtml(image.name)}</option>`);
+  });
+  select.innerHTML = options.join('');
+}
+
 function openProductDialog(productId = '') {
   populateCategoryOptions();
   $('#productForm').reset();
   $('#productEditId').value = productId;
   selectedProductImage = null;
   const product = catalog.find(item => item.id === productId);
+  populateDriveImageOptions(product?.imageUrl || '');
   $('#productDialogTitle').textContent = product ? 'Produkt bearbeiten' : 'Neues Produkt';
   $('#saveProductBtn').textContent = product ? 'Änderungen speichern' : 'Produkt speichern';
   if (product) {
@@ -591,6 +605,7 @@ async function handleImageFile(file) {
 
   try {
     selectedProductImage = await compressImage(file, 1600, 0.82);
+    if ($('#productDriveImage')) $('#productDriveImage').value = '';
     $('#productImagePreview').innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)}</span>`;
   } catch (error) {
     toast('Foto konnte nicht verarbeitet werden.');
@@ -639,7 +654,7 @@ async function submitProduct(event) {
     purchasePrice: Number($('#productPurchasePrice').value || 0), weight: $('#productWeight').value.trim(),
     manufacturer: $('#productManufacturer').value.trim(), serialNumber: $('#productSerialNumber').value.trim(),
     purchaseDate: $('#productPurchaseDate').value, notes: $('#productNotes').value.trim(),
-    productUrl: makeProductUrl(id), imageUrl: existing?.imageUrl || ''
+    productUrl: makeProductUrl(id), imageUrl: selectedProductImage?.existingUrl || existing?.imageUrl || ''
   });
   if (!product.name || !product.category || !product.location) return toast('Bitte Name, Kategorie und Standort ausfüllen.');
   if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
@@ -647,7 +662,7 @@ async function submitProduct(event) {
   saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
   try {
     const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
-    if (selectedProductImage) await sendCloudAction({action:'addProduct', payload});
+    if (selectedProductImage?.dataUrl) await sendCloudAction({action:'addProduct', payload});
     else await sendCloudJsonpAction('addProduct', payload);
     await syncFromCloud({force:true});
     $('#productDialog').close();
@@ -655,6 +670,22 @@ async function submitProduct(event) {
     openDetail(product.id);
   } catch (error) { toast('Produkt konnte nicht gespeichert werden: ' + error.message); }
   finally { saveButton.disabled = false; saveButton.textContent = existing ? 'Änderungen speichern' : 'Produkt speichern'; }
+}
+
+async function syncDriveImages() {
+  const button = $('#syncDriveImagesBtn');
+  if (button) { button.disabled = true; button.textContent = 'Bilder werden zugeordnet …'; }
+  try {
+    const result = await sendCloudJsonpAction('syncProductImages', {});
+    await syncFromCloud({ force: true });
+    const count = Number(result?.assigned || 0);
+    const unresolved = Array.isArray(result?.unresolved) ? result.unresolved.length : 0;
+    toast(`${count} Bild${count === 1 ? '' : 'er'} automatisch zugeordnet. ${unresolved} Produkt${unresolved === 1 ? '' : 'e'} noch ohne eindeutiges Bild.`);
+  } catch (error) {
+    toast('Bilder konnten nicht zugeordnet werden: ' + error.message);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Bilder aus Drive zuordnen'; }
+  }
 }
 
 function cleanApiUrl(value) {
@@ -752,6 +783,14 @@ function bind() {
   $('#productForm').onsubmit = submitProduct;
   if ($('#addProductBtn')) $('#addProductBtn').onclick = openProductDialog;
   $('#productCategory').onchange = updateProductIdPreview;
+  $('#productDriveImage').onchange = event => {
+    const url = event.target.value;
+    if (!url) { selectedProductImage = null; return; }
+    const option = event.target.selectedOptions[0];
+    selectedProductImage = { existingUrl: url, filename: option?.dataset?.name || 'Drive-Bild' };
+    $('#productImagePreview').innerHTML = `<img src="${escapeHtml(url)}" alt="Vorschau"><span>${escapeHtml(selectedProductImage.filename)}</span>`;
+  };
+  $('#syncDriveImagesBtn').onclick = syncDriveImages;
   bindImageUpload();
 
   $('#scanBtn').onclick = () => $('#scanDialog').showModal();

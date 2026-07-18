@@ -88,7 +88,7 @@
     <section id="adminPage" class="app-page hidden">
       <div class="page-heading">
         <div><small>COCOMAC ESSENTIAL</small><h2>Administration</h2></div>
-        <button id="adminAddProductBtn" type="button">+ Neues Produkt</button>
+        <div class="admin-heading-actions"><button id="syncDriveImagesBtn" type="button" class="ghost">Bilder aus Drive zuordnen</button><button id="adminAddProductBtn" type="button">+ Neues Produkt</button></div>
       </div>
       <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
       <section class="admin-section">
@@ -252,6 +252,12 @@
           <strong>Datei auswählen</strong>
           <small>Am Handy kannst du Fotomediathek, Dateien oder Kamera wählen.</small>
         </div>
+      </label>
+      <label>Vorhandenes Bild aus Google Drive
+        <select id="productDriveImage">
+          <option value="">Kein anderes Drive-Bild auswählen</option>
+        </select>
+        <small class="field-help">Der Ordner „Cocomac Essentials Produktbilder“ ist fest mit der App verbunden.</small>
       </label>
 
       <div class="form-columns">

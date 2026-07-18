@@ -126,3 +126,5 @@ input,select,textarea,button{max-width:100%;min-width:0}
   .timeline-item{grid-template-columns:82px minmax(0,1fr);gap:10px}
   dialog{max-width:calc(100vw - 16px)!important;margin-left:auto;margin-right:auto}
 }
+
+.admin-heading-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.field-help{display:block;margin-top:6px;color:var(--muted);font-weight:500}.product-dialog select#productDriveImage{width:100%}@media(max-width:700px){.admin-heading-actions{width:100%;justify-content:stretch}.admin-heading-actions button{flex:1}}
