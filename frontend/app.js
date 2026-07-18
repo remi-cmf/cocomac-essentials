@@ -6,6 +6,7 @@ const SETTINGS_KEY = 'cocomac-essential-settings-v1';
 const LOCAL_PRODUCTS_KEY = 'cocomac-essential-products-v1';
 const LOCAL_PROJECTS_KEY = 'cocomac-essential-projects-v1';
 const LOCAL_RESERVATIONS_KEY = 'cocomac-essential-reservations-v1';
+const LOCAL_DELETED_PRODUCTS_KEY = 'cocomac-essential-deleted-products-v1';
 const PRODUCT_URL_BASE = 'https://remi-cmf.github.io/cocomac-essentials/';
 
 let baseCatalog = [];
@@ -19,6 +20,7 @@ let selectedProductImage = null;
 let projects = [];
 let reservations = [];
 let activeProjectId = null;
+let reservationOrigin = 'project';
 
 async function boot() {
   baseCatalog = await fetch('./data/equipment.json', { cache: 'no-store' })
@@ -64,6 +66,7 @@ async function refreshCatalog() {
   let cloudProducts = [];
   let cloudProjects = [];
   let cloudReservations = [];
+  let cloudDeletedProductIds = [];
 
   const currentSettings = settings();
   if (currentSettings.cloudMode && currentSettings.apiUrl) {
@@ -72,14 +75,22 @@ async function refreshCatalog() {
       cloudProducts = snapshot.products || [];
       cloudProjects = snapshot.projects || [];
       cloudReservations = snapshot.reservations || [];
+      cloudDeletedProductIds = snapshot.deletedProductIds || [];
     } catch (error) {
       console.warn('Cloud-Daten konnten nicht geladen werden:', error);
     }
   }
 
+  const deletedProductIds = new Set([
+    ...readJson(LOCAL_DELETED_PRODUCTS_KEY, []),
+    ...cloudDeletedProductIds
+  ].map(id => String(id).toUpperCase()));
+
   const merged = new Map();
   [...baseCatalog, ...localProducts, ...cloudProducts].forEach(item => {
-    if (item?.id) merged.set(String(item.id).toUpperCase(), normalizeProduct(item));
+    if (item?.id && !deletedProductIds.has(String(item.id).toUpperCase())) {
+      merged.set(String(item.id).toUpperCase(), normalizeProduct(item));
+    }
   });
   catalog = [...merged.values()];
 
@@ -124,25 +135,20 @@ function makeProductUrl(id) {
   return url.href;
 }
 
-function totals(item) {
-  const movements = state.movements.filter(m => m.articleId === item.id);
-  let loaned = 0;
-  let blocked = 0;
-
-  for (const movement of movements) {
-    if (movement.action === 'checkout') loaned += movement.quantity;
-    if (movement.action === 'return') loaned -= movement.quantity;
-    if (movement.action === 'defect') blocked += movement.quantity;
-    if (movement.action === 'release') blocked -= movement.quantity;
-  }
-
-  loaned = Math.max(0, loaned);
-  blocked = Math.max(0, blocked);
-
+function totals(item, from = todayIso(), to = todayIso()) {
+  const relevant = reservations.filter(r =>
+    r.productId === item.id &&
+    !['Storniert', 'Zurückgegeben', 'Freigegeben'].includes(r.status) &&
+    (r.status === 'Defekt' || rangesOverlap(r.from, r.to, from, to))
+  );
+  const loaned = relevant.filter(r => r.status === 'Ausgegeben').reduce((sum, r) => sum + r.quantity, 0);
+  const reserved = relevant.filter(r => r.status === 'Reserviert').reduce((sum, r) => sum + r.quantity, 0);
+  const blocked = relevant.filter(r => r.status === 'Defekt').reduce((sum, r) => sum + r.quantity, 0);
   return {
     loaned,
+    reserved,
     blocked,
-    available: Math.max(0, item.total - loaned - blocked)
+    available: Math.max(0, Number(item.total || 0) - loaned - reserved - blocked)
   };
 }
 
@@ -159,8 +165,8 @@ function render() {
   const sum = key => withTotals.reduce((total, item) => total + item[key], 0);
 
   $('#stats').innerHTML = [
-    ['Artikelarten', catalog.length],
-    ['Verfügbar', sum('available')],
+    ['Artikelarten', new Set(catalog.map(item => item.id)).size],
+    ['Gesamtbestand', catalog.reduce((total, item) => total + Number(item.total || 0), 0)],
     ['Ausgeliehen', sum('loaned')],
     ['Defekt', sum('blocked')]
   ].map(([label, value]) =>
@@ -179,7 +185,7 @@ function render() {
           <div class="meta">${escapeHtml(item.category)}</div>
           <h3>${escapeHtml(item.name)}</h3>
           <div class="meta">${escapeHtml(item.id)} · ${escapeHtml(item.location)}</div>
-          <span class="pill">${itemTotals.available} von ${item.total} verfügbar</span>
+          <span class="pill ${itemTotals.available === 0 ? 'pill-danger' : ''}">${itemTotals.available === 0 ? 'Aktuell nicht verfügbar' : `${itemTotals.available} von ${item.total} verfügbar`}</span>
         </div>
       </article>`;
   }).join('');
@@ -195,6 +201,7 @@ function render() {
   $('#syncBanner').classList.toggle('demo', !currentSettings.cloudMode);
   renderProjects();
   renderCalendar();
+  renderAdminProducts();
 }
 
 function openDetail(id) {
@@ -308,51 +315,140 @@ function printQr(item) {
 
 function openAction(id, action) {
   const item = catalog.find(product => product.id === id);
+  if (!item) return toast('Artikel nicht gefunden.');
+
+  $('#actionForm').reset();
   $('#actionArticleId').value = id;
   $('#actionType').value = action;
-  $('#actionTitle').textContent = item.name;
-  $('#location').value = item.location;
+  $('#actionTitle').textContent = {
+    checkout: 'Ausleihen', return: 'Zurückgeben', defect: 'Defekt melden', release: 'Defekt freigeben'
+  }[action] || 'Buchung';
+
+  const activeProjects = projects.filter(p => !['Abgeschlossen', 'Zurückgegeben'].includes(p.status));
+  const projectSelect = $('#actionProject');
+  const rows = reservations.filter(r => r.productId === id && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status));
+  let selectableProjects = activeProjects;
+  if (['return','defect'].includes(action)) {
+    const ids = new Set(rows.filter(r => ['Reserviert','Ausgegeben'].includes(r.status)).map(r => r.projectId));
+    selectableProjects = activeProjects.filter(p => ids.has(p.id));
+  }
+  if (action === 'release') {
+    const ids = new Set(rows.filter(r => r.status === 'Defekt').map(r => r.projectId));
+    selectableProjects = projects.filter(p => ids.has(p.id));
+  }
+  projectSelect.innerHTML = '<option value="">Projekt auswählen</option>' + selectableProjects.map(p =>
+    `<option value="${escapeHtml(p.id)}">${escapeHtml(projectOptionLabel(p))}</option>`
+  ).join('');
+
+  $('#actionHelp').innerHTML = action === 'checkout'
+    ? 'Wähle das Projekt. Der Projektzeitraum wird vorgeschlagen und kann direkt angepasst werden.'
+    : action === 'return'
+      ? 'Wähle das Projekt, aus dem das Equipment zurückgegeben wird.'
+      : action === 'defect'
+        ? 'Wähle das Projekt, aus dem der Defekt gemeldet wird.'
+        : 'Wähle das Projekt und die defekte Menge, die wieder freigegeben werden soll.';
+  updateActionProjectInfo();
   $('#detailDialog').close();
   $('#actionDialog').showModal();
 }
 
+function actionCandidateRows() {
+  const id = $('#actionArticleId').value;
+  const projectId = $('#actionProject').value;
+  const action = $('#actionType').value;
+  const allowed = action === 'release' ? ['Defekt'] : action === 'checkout' ? [] : ['Reserviert','Ausgegeben'];
+  return reservations.filter(r => r.productId === id && r.projectId === projectId && allowed.includes(r.status));
+}
+
+function updateActionProjectInfo() {
+  const action = $('#actionType').value;
+  const project = projects.find(p => p.id === $('#actionProject').value);
+  const info = $('#actionProjectInfo');
+  const from = $('#actionFrom');
+  const to = $('#actionTo');
+  if (!project) {
+    info.innerHTML = '<b>Bitte ein Projekt auswählen.</b>';
+    from.value = ''; to.value = '';
+    $('#actionSubmitBtn').disabled = true;
+    return;
+  }
+  if (action === 'checkout') {
+    from.value = project.start; to.value = project.end;
+  } else {
+    const rows = actionCandidateRows();
+    from.value = rows[0]?.from || project.start;
+    to.value = rows[0]?.to || project.end;
+  }
+  info.innerHTML = `<div class="reservation-project-head"><div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b></div><span class="status-badge">${escapeHtml(project.status)}</span></div><div class="reservation-project-grid"><div><small>Projektzeitraum</small><b>${formatDate(project.start)}–${formatDate(project.end)}</b></div><div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div></div>`;
+  updateActionAvailability();
+}
+
+function updateActionAvailability() {
+  const action = $('#actionType').value;
+  const item = catalog.find(p => p.id === $('#actionArticleId').value);
+  const project = projects.find(p => p.id === $('#actionProject').value);
+  const from = $('#actionFrom').value;
+  const to = $('#actionTo').value;
+  const summary = $('#actionAvailability');
+  const submit = $('#actionSubmitBtn');
+  if (!item || !project || !from || !to || to < from) {
+    summary.innerHTML = '<b>Projekt und gültigen Zeitraum auswählen.</b>';
+    submit.disabled = true; return;
+  }
+  let max = 0;
+  if (action === 'checkout') max = availableFor(item.id, from, to);
+  else max = actionCandidateRows().reduce((sum, r) => sum + r.quantity, 0);
+  $('#quantity').max = String(max);
+  if (Number($('#quantity').value || 1) > max) $('#quantity').value = Math.max(1, max);
+  const label = action === 'checkout' ? 'im Zeitraum verfügbar' : action === 'release' ? 'als defekt gebucht' : 'diesem Projekt zugeordnet';
+  summary.innerHTML = `<div class="reservation-product-summary"><div><small>${escapeHtml(item.category)} · ${escapeHtml(item.id)}</small><b>${escapeHtml(item.name)}</b><span>${escapeHtml(item.location)} · Bestand ${item.total}</span></div><div class="reservation-free ${max === 0 ? 'availability-danger' : ''}"><b>${max}</b><small>${label}</small></div></div>`;
+  submit.disabled = max < 1;
+}
+
 async function submitMovement(event) {
   event.preventDefault();
-  const movement = {
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    articleId: $('#actionArticleId').value,
-    action: $('#actionType').value,
-    quantity: Number($('#quantity').value),
-    person: $('#person').value.trim(),
-    project: $('#project').value.trim(),
-    dueDate: $('#dueDate').value,
-    location: $('#location').value.trim(),
-    note: $('#note').value.trim()
-  };
+  const action = $('#actionType').value;
+  const itemId = $('#actionArticleId').value;
+  const projectId = $('#actionProject').value;
+  const quantity = Number($('#quantity').value);
+  const from = $('#actionFrom').value;
+  const to = $('#actionTo').value;
+  const note = $('#note').value.trim();
+  if (!projectId || !from || !to || !Number.isInteger(quantity) || quantity < 1) return toast('Bitte Projekt, Zeitraum und Menge vollständig eintragen.');
+  if (to < from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
 
-  const item = catalog.find(product => product.id === movement.articleId);
-  const itemTotals = totals(item);
-  if (!Number.isInteger(movement.quantity) || movement.quantity < 1) return toast('Bitte eine gültige Menge eingeben.');
-  if (movement.action === 'checkout' && movement.quantity > itemTotals.available) return toast(`Es sind nur noch ${itemTotals.available} Stück verfügbar.`);
-  if (movement.action === 'return' && movement.quantity > itemTotals.loaned) return toast(`Es sind nur ${itemTotals.loaned} Stück als ausgeliehen gebucht.`);
-  if (movement.action === 'release' && movement.quantity > itemTotals.blocked) return toast(`Es sind nur ${itemTotals.blocked} Stück als defekt gebucht.`);
-
-  const currentSettings = settings();
-  if (currentSettings.cloudMode) {
-    try {
-      await sendCloudAction({ action: 'movement', payload: movement });
-    } catch (error) {
-      return toast('Nicht gespeichert: ' + error.message);
-    }
+  if (action === 'checkout') {
+    const available = availableFor(itemId, from, to);
+    if (quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
+    const reservation = normalizeReservation({id:crypto.randomUUID(), projectId, productId:itemId, quantity, from, to, status:'Ausgegeben', note});
+    if (settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:reservation});
+    const local = readJson(LOCAL_RESERVATIONS_KEY,[]); local.push(reservation); localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
+  } else {
+    const candidates = actionCandidateRows();
+    const max = candidates.reduce((sum,r)=>sum+r.quantity,0);
+    if (quantity > max) return toast(`Für diese Aktion sind nur ${max} Stück verfügbar.`);
+    const payload = {actionType:action, projectId, productId:itemId, quantity, from, to, note};
+    if (settings().cloudMode) await sendCloudAction({action:'reservationAction',payload});
+    applyLocalReservationAction(payload);
   }
+  await refreshCatalog(); render(); $('#actionDialog').close(); openDetail(itemId);
+  toast(action === 'checkout' ? 'Equipment wurde ausgeliehen.' : action === 'return' ? 'Equipment wurde zurückgegeben.' : action === 'defect' ? 'Defekt wurde erfasst.' : 'Defekte Menge wurde wieder freigegeben.');
+}
 
-  state.movements.push(movement);
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
-  $('#actionDialog').close();
-  $('#actionForm').reset();
-  render();
-  toast(currentSettings.cloudMode ? 'Buchung gespeichert und an Google Sheets gesendet.' : 'Buchung lokal gespeichert.');
+function applyLocalReservationAction(payload) {
+  let list = readJson(LOCAL_RESERVATIONS_KEY,[]).map(normalizeReservation);
+  const sourceStatuses = payload.actionType === 'release' ? ['Defekt'] : ['Reserviert','Ausgegeben'];
+  let remaining = payload.quantity;
+  const created = [];
+  for (const row of list) {
+    if (remaining <= 0 || row.projectId !== payload.projectId || row.productId !== payload.productId || !sourceStatuses.includes(row.status)) continue;
+    const take = Math.min(remaining, row.quantity);
+    row.quantity -= take;
+    created.push(normalizeReservation({id:crypto.randomUUID(), projectId:row.projectId, productId:row.productId, quantity:take, from:payload.from || row.from, to:payload.to || row.to, status: payload.actionType === 'return' ? 'Zurückgegeben' : payload.actionType === 'defect' ? 'Defekt' : 'Freigegeben', note:payload.note}));
+    remaining -= take;
+  }
+  list = list.filter(r => r.quantity > 0).concat(created);
+  localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(list));
 }
 
 function populateCategoryOptions() {
@@ -521,6 +617,8 @@ async function submitProduct(event) {
     const withoutSameId = localProducts.filter(item => item.id !== product.id);
     withoutSameId.push(product);
     localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(withoutSameId));
+    const deleted = readJson(LOCAL_DELETED_PRODUCTS_KEY, []).filter(itemId => String(itemId).toUpperCase() !== product.id);
+    localStorage.setItem(LOCAL_DELETED_PRODUCTS_KEY, JSON.stringify(deleted));
 
     await refreshCatalog();
     render();
@@ -590,15 +688,23 @@ function bind() {
   $('#search').oninput = render;
   $$('.nav-btn').forEach(button => button.onclick = () => showPage(button.dataset.page));
   $('#addProjectBtn').onclick = openProjectDialog;
+  $('#adminAddProductBtn').onclick = openProductDialog;
   $('#projectForm').onsubmit = submitProject;
+  $('#projectName').addEventListener('input', updateProjectNumberPreview);
+  $('#projectStart').addEventListener('change', updateProjectNumberPreview);
   $('#reservationForm').onsubmit = submitReservation;
+  $('#reservationProject').onchange = updateReservationProjectInfo;
   $('#reservationProduct').onchange = updateReservationAvailability;
   $('#reservationFrom').onchange = updateReservationAvailability;
   $('#reservationTo').onchange = updateReservationAvailability;
   $('#refreshCalendarBtn').onclick = renderCalendar;
   $('#actionForm').onsubmit = submitMovement;
+  $('#actionProject').onchange = updateActionProjectInfo;
+  $('#actionFrom').onchange = updateActionAvailability;
+  $('#actionTo').onchange = updateActionAvailability;
+  $('#quantity').oninput = updateActionAvailability;
   $('#productForm').onsubmit = submitProduct;
-  $('#addProductBtn').onclick = openProductDialog;
+  if ($('#addProductBtn')) $('#addProductBtn').onclick = openProductDialog;
   $('#productCategory').onchange = updateProductIdPreview;
   bindImageUpload();
 
@@ -644,6 +750,7 @@ function bind() {
     if (confirm('Lokale Buchungen und lokal hinzugefügte Produkte wirklich löschen?')) {
       localStorage.removeItem(LOCAL_KEY);
       localStorage.removeItem(LOCAL_PRODUCTS_KEY);
+      localStorage.removeItem(LOCAL_DELETED_PRODUCTS_KEY);
       state = { movements: [] };
       refreshCatalog().then(render);
       toast('Lokale Testdaten gelöscht.');
@@ -793,7 +900,7 @@ function todayIso() { return new Date().toISOString().slice(0,10); }
 function addDaysIso(days) { const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
 function rangesOverlap(a1,a2,b1,b2) { return a1 <= b2 && b1 <= a2; }
 function reservedQuantity(productId, from, to, ignoreId='') {
-  return reservations.filter(r => r.id !== ignoreId && r.productId === productId && r.status !== 'Storniert' && r.status !== 'Zurückgegeben' && rangesOverlap(r.from,r.to,from,to))
+  return reservations.filter(r => r.id !== ignoreId && r.productId === productId && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status) && (r.status === 'Defekt' || rangesOverlap(r.from,r.to,from,to)))
     .reduce((sum,r)=>sum+r.quantity,0);
 }
 function availableFor(productId, from, to) {
@@ -817,12 +924,34 @@ function renderProjects() {
   $$('[data-project-id]').forEach(card=>card.onclick=()=>openProjectDetail(card.dataset.projectId));
 }
 function openProjectDialog() {
-  $('#projectForm').reset(); $('#projectStart').value=todayIso(); $('#projectEnd').value=addDaysIso(7); $('#projectDialog').showModal();
+  $('#projectForm').reset();
+  $('#projectStart').value=todayIso();
+  $('#projectEnd').value=addDaysIso(7);
+  updateProjectNumberPreview();
+  $('#projectDialog').showModal();
 }
-function nextProjectId() { return `PRJ-${new Date().getFullYear()}-${String(projects.length+1).padStart(3,'0')}`; }
+function projectNameCode(name) {
+  const clean = String(name || 'PRJ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return (clean.slice(0,3) || 'PRJ').padEnd(3,'X');
+}
+function projectDateCode(date) {
+  const [year, month, day] = String(date || todayIso()).split('-');
+  return `${month}${day}${String(year).slice(-2)}`;
+}
+function nextProjectNumber(name, start) {
+  const base = `${projectNameCode(name)}-${projectDateCode(start)}`;
+  const used = projects.map(p => p.number || p.id).filter(value => String(value).startsWith(base + '-')).map(value => Number(String(value).split('-').pop())).filter(Number.isFinite);
+  return `${base}-${String((used.length ? Math.max(...used) : 0) + 1).padStart(3,'0')}`;
+}
+function updateProjectNumberPreview() {
+  const value = nextProjectNumber($('#projectName')?.value || '', $('#projectStart')?.value || todayIso());
+  if ($('#projectNumberPreview')) $('#projectNumberPreview').textContent = value;
+}
+function nextProjectId(name, start) { return nextProjectNumber(name, start); }
 async function submitProject(event) {
   event.preventDefault();
-  const project=normalizeProject({ id:nextProjectId(), name:$('#projectName').value.trim(), number:$('#projectNumber').value.trim(), contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
+  const generatedNumber = nextProjectNumber($('#projectName').value.trim(), $('#projectStart').value);
+  const project=normalizeProject({ id:generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   if(settings().cloudMode) await sendCloudAction({action:'saveProject',payload:project});
@@ -838,29 +967,184 @@ function openProjectDetail(projectId) {
   if($('#emailProjectBtn')) $('#emailProjectBtn').onclick=()=>emailProjectDocument(p.id);
   $('#projectDetailDialog').showModal();
 }
-function openReservationDialog(projectId) {
-  const p=projects.find(x=>x.id===projectId); if(!p)return;
-  $('#reservationForm').reset(); $('#reservationProjectId').value=p.id; $('#reservationFrom').value=p.start; $('#reservationTo').value=p.end;
-  $('#reservationProduct').innerHTML='<option value="">Produkt auswählen</option>'+catalog.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${escapeHtml(item.id)})</option>`).join('');
-  updateReservationAvailability(); $('#reservationDialog').showModal();
+function projectOptionLabel(project) {
+  const number = project.number ? ` · ${project.number}` : '';
+  return `${project.name}${number} (${formatDate(project.start)}–${formatDate(project.end)})`;
 }
+
+function openReservationDialog(projectId = '', productId = '', origin = 'project') {
+  reservationOrigin = origin;
+  $('#reservationForm').reset();
+
+  const activeProjects = projects
+    .filter(project => !['Abgeschlossen', 'Zurückgegeben'].includes(project.status))
+    .sort((a, b) => String(a.start).localeCompare(String(b.start)));
+
+  $('#reservationProject').innerHTML =
+    '<option value="">Projekt auswählen</option>' +
+    activeProjects.map(project =>
+      `<option value="${escapeHtml(project.id)}">${escapeHtml(projectOptionLabel(project))}</option>`
+    ).join('');
+
+  $('#reservationProduct').innerHTML =
+    '<option value="">Produkt auswählen</option>' +
+    catalog.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(item =>
+      `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${escapeHtml(item.id)})</option>`
+    ).join('');
+
+  if (projectId && projects.some(project => project.id === projectId)) {
+    $('#reservationProject').value = projectId;
+  }
+  if (productId && catalog.some(product => product.id === productId)) {
+    $('#reservationProduct').value = productId;
+  }
+
+  $('#reservationProduct').disabled = Boolean(productId && origin === 'equipment');
+  $('#reservationDialogTitle').textContent = origin === 'equipment' ? 'Produkt ausleihen' : 'Equipment hinzufügen';
+  $('#reservationSubmitBtn').textContent = origin === 'equipment' ? 'Für Projekt reservieren' : 'Equipment hinzufügen';
+
+  updateReservationProjectInfo();
+  updateReservationAvailability();
+  $('#reservationDialog').showModal();
+}
+
+function updateReservationProjectInfo() {
+  const projectId = $('#reservationProject')?.value || '';
+  const project = projects.find(item => item.id === projectId);
+  $('#reservationProjectId').value = projectId;
+
+  if (!project) {
+    $('#reservationProjectInfo').innerHTML = projects.length
+      ? '<b>Bitte zuerst ein Projekt auswählen.</b><br><small>Danach werden Zeitraum, Ansprechpartner und Status automatisch übernommen.</small>'
+      : '<b>Noch kein Projekt vorhanden.</b><br><small>Lege zuerst im Bereich „Projekte“ ein Projekt an.</small>';
+    $('#reservationFrom').value = '';
+    $('#reservationTo').value = '';
+    updateReservationAvailability();
+    return;
+  }
+
+  $('#reservationFrom').value = project.start;
+  $('#reservationTo').value = project.end;
+  const emails = [project.email1, project.email2].filter(Boolean).join(', ') || 'Keine E-Mail hinterlegt';
+  $('#reservationProjectInfo').innerHTML = `
+    <div class="reservation-project-head">
+      <div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b></div>
+      <span class="status-badge">${escapeHtml(project.status)}</span>
+    </div>
+    <div class="reservation-project-grid">
+      <div><small>Zeitraum</small><b>${formatDate(project.start)}–${formatDate(project.end)}</b></div>
+      <div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div>
+      <div><small>E-Mail</small><b>${escapeHtml(emails)}</b></div>
+      <div><small>Bereits zugeordnet</small><b>${projectReservations(project.id).reduce((sum, row) => sum + row.quantity, 0)} Teile</b></div>
+    </div>`;
+  updateReservationAvailability();
+}
+
 function updateReservationAvailability() {
-  const id=$('#reservationProduct')?.value, from=$('#reservationFrom')?.value, to=$('#reservationTo')?.value;
-  if(!id||!from||!to){ $('#reservationAvailability').textContent='Produkt und Zeitraum auswählen.'; return; }
-  const product=catalog.find(p=>p.id===id), available=availableFor(id,from,to), reserved=reservedQuantity(id,from,to);
-  $('#reservationAvailability').innerHTML=`<b>${available} von ${product.total} verfügbar</b><br><small>${reserved} Stück sind im gewählten Zeitraum bereits belegt.</small>`;
-  $('#reservationQuantity').max=String(available);
+  const projectId = $('#reservationProject')?.value;
+  const id = $('#reservationProduct')?.value;
+  const from = $('#reservationFrom')?.value;
+  const to = $('#reservationTo')?.value;
+  const submit = $('#reservationSubmitBtn');
+
+  if (!projectId) {
+    $('#reservationAvailability').innerHTML = '<b>Projekt auswählen</b><br><small>Die Verfügbarkeit wird anschließend für den Projektzeitraum berechnet.</small>';
+    if (submit) submit.disabled = true;
+    return;
+  }
+  if (!id || !from || !to) {
+    $('#reservationAvailability').innerHTML = '<b>Produkt auswählen</b><br><small>Danach siehst du Bestand und freie Menge.</small>';
+    if (submit) submit.disabled = true;
+    return;
+  }
+
+  const product = catalog.find(item => item.id === id);
+  if (!product) return;
+  const available = availableFor(id, from, to);
+  const reserved = reservedQuantity(id, from, to);
+  const statusClass = available === 0 ? 'availability-danger' : '';
+  $('#reservationAvailability').innerHTML = `
+    <div class="reservation-product-summary">
+      ${productImageSource(product) ? `<img src="${escapeHtml(productImageSource(product))}" alt="${escapeHtml(product.name)}">` : ''}
+      <div><small>${escapeHtml(product.category)} · ${escapeHtml(product.id)}</small><b>${escapeHtml(product.name)}</b><span>${escapeHtml(product.location)} · Bestand ${product.total}</span></div>
+      <div class="reservation-free ${statusClass}"><b>${available}</b><small>frei</small></div>
+    </div>
+    <small>${reserved} Stück sind im gewählten Zeitraum bereits belegt.</small>`;
+  $('#reservationQuantity').max = String(available);
+  if (Number($('#reservationQuantity').value) > available) $('#reservationQuantity').value = Math.max(1, available);
+  if (submit) submit.disabled = available < 1;
 }
+
 async function submitReservation(event) {
   event.preventDefault();
-  const r=normalizeReservation({id:crypto.randomUUID(), projectId:$('#reservationProjectId').value, productId:$('#reservationProduct').value, quantity:Number($('#reservationQuantity').value), from:$('#reservationFrom').value, to:$('#reservationTo').value, status:$('#reservationStatus').value, note:$('#reservationNote').value.trim()});
-  if(!r.productId||!r.from||!r.to||r.quantity<1)return toast('Bitte alle Pflichtfelder ausfüllen.');
-  if(r.to<r.from)return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-  const available=availableFor(r.productId,r.from,r.to); if(r.quantity>available)return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
-  if(settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:r});
-  const local=readJson(LOCAL_RESERVATIONS_KEY,[]).filter(x=>x.id!==r.id); local.push(r); localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
-  await refreshCatalog(); render(); $('#reservationDialog').close(); $('#projectDetailDialog').close(); openProjectDetail(r.projectId); toast('Equipment wurde reserviert.');
+  const r = normalizeReservation({
+    id: crypto.randomUUID(),
+    projectId: $('#reservationProject').value,
+    productId: $('#reservationProduct').value,
+    quantity: Number($('#reservationQuantity').value),
+    from: $('#reservationFrom').value,
+    to: $('#reservationTo').value,
+    status: $('#reservationStatus').value,
+    note: $('#reservationNote').value.trim()
+  });
+  if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) return toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
+  if (r.to < r.from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
+  const available = availableFor(r.productId, r.from, r.to);
+  if (r.quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
+  if (settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:r});
+  const local = readJson(LOCAL_RESERVATIONS_KEY,[]).filter(x=>x.id!==r.id);
+  local.push(r);
+  localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
+  await refreshCatalog();
+  render();
+  $('#reservationDialog').close();
+
+  if (reservationOrigin === 'project') {
+    $('#projectDetailDialog').close();
+    openProjectDetail(r.projectId);
+  } else {
+    openDetail(r.productId);
+  }
+  toast('Equipment wurde dem Projekt zugeordnet.');
 }
+
+
+function renderAdminProducts() {
+  const wrap = $('#adminProductList');
+  if (!wrap) return;
+  const sorted = catalog.slice().sort((a,b) => a.name.localeCompare(b.name, 'de'));
+  wrap.innerHTML = sorted.length ? sorted.map(item => {
+    const image = productImageSource(item);
+    return `<div class="admin-product-row">
+      ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">` : '<div class="image-placeholder">Kein Foto</div>'}
+      <div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · ${escapeHtml(item.category)} · Bestand ${item.total}</small></div>
+      <button type="button" class="danger" data-delete-product="${escapeHtml(item.id)}">Produkt löschen</button>
+    </div>`;
+  }).join('') : '<div class="empty-state">Keine Produkte vorhanden.</div>';
+  $$('[data-delete-product]').forEach(button => button.onclick = () => deleteProduct(button.dataset.deleteProduct));
+}
+
+async function deleteProduct(productId) {
+  const product = catalog.find(item => item.id === productId);
+  if (!product) return;
+  const linked = reservations.filter(item => item.productId === productId && !['Storniert','Zurückgegeben'].includes(item.status));
+  if (linked.length) return toast('Dieses Produkt ist noch in aktiven Projekten reserviert und kann deshalb nicht gelöscht werden.');
+  if (!confirm(`„${product.name}“ wirklich löschen? Dieser Schritt blendet das Produkt auf allen Geräten aus.`)) return;
+  try {
+    if (settings().cloudMode) await sendCloudAction({ action: 'deleteProduct', payload: { productId } });
+    const deleted = new Set(readJson(LOCAL_DELETED_PRODUCTS_KEY, []).map(id => String(id).toUpperCase()));
+    deleted.add(productId.toUpperCase());
+    localStorage.setItem(LOCAL_DELETED_PRODUCTS_KEY, JSON.stringify([...deleted]));
+    const localProducts = readJson(LOCAL_PRODUCTS_KEY, []).filter(item => String(item.id).toUpperCase() !== productId.toUpperCase());
+    localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(localProducts));
+    await refreshCatalog();
+    render();
+    toast('Produkt gelöscht.');
+  } catch (error) {
+    toast('Produkt konnte nicht gelöscht werden: ' + error.message);
+  }
+}
+
 function renderCalendar() {
   if(!$('#calendarFrom')) return;
   if(!$('#calendarFrom').value) $('#calendarFrom').value=todayIso();
@@ -878,7 +1162,18 @@ function projectDocumentHtml(projectId) {
   const items=rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<tr><td>${r.quantity}</td><td>${escapeHtml(item?.name||r.productId)}</td><td>${escapeHtml(r.productId)}</td><td>${formatDate(r.from)}–${formatDate(r.to)}</td><td>${escapeHtml(r.status)}</td></tr>`}).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Equipment ${escapeHtml(p.name)}</title><style>body{font:14px Arial;padding:35px;color:#171716}h1{margin-bottom:4px}small{color:#666}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.sign{margin-top:60px;display:flex;gap:80px}.line{border-top:1px solid;width:220px;padding-top:6px}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><p><b>Zeitraum:</b> ${formatDate(p.start)}–${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact||'–')}<br><b>Status:</b> ${escapeHtml(p.status)}</p><table><thead><tr><th>Menge</th><th>Equipment</th><th>ID</th><th>Zeitraum</th><th>Status</th></tr></thead><tbody>${items||'<tr><td colspan="5">Kein Equipment</td></tr>'}</tbody></table><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div></body></html>`;
 }
-function printProjectDocument(projectId) { const w=window.open('','_blank'); if(!w)return toast('Bitte Pop-ups erlauben.'); w.document.write(projectDocumentHtml(projectId)); w.document.close(); setTimeout(()=>w.print(),250); }
+function printProjectDocument(projectId) {
+  const printArea = $('#printArea');
+  const html = projectDocumentHtml(projectId);
+  const bodyMatch = html.match(/<body>([\s\S]*)<\/body>/i);
+  printArea.innerHTML = bodyMatch ? bodyMatch[1] : html;
+  printArea.setAttribute('aria-hidden', 'false');
+  setTimeout(() => window.print(), 80);
+  setTimeout(() => {
+    printArea.innerHTML = '';
+    printArea.setAttribute('aria-hidden', 'true');
+  }, 1200);
+}
 async function emailProjectDocument(projectId) {
   const p=projects.find(x=>x.id===projectId); if(!p?.email1)return toast('Keine E-Mail-Adresse hinterlegt.');
   if(!settings().cloudMode)return toast('Der E-Mail-Versand ist nur im Cloud-Modus möglich.');

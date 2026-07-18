@@ -37,6 +37,7 @@
       <button type="button" class="nav-btn active" data-page="equipmentPage">Equipment</button>
       <button type="button" class="nav-btn ghost" data-page="projectsPage">Projekte</button>
       <button type="button" class="nav-btn ghost" data-page="calendarPage">Kalender</button>
+      <button type="button" class="nav-btn ghost" data-page="adminPage">Administration</button>
     </nav>
 
     <section id="equipmentPage" class="app-page active">
@@ -48,7 +49,6 @@
         type="search"
         placeholder="Artikel, ID oder Kategorie suchen">
 
-      <button id="addProductBtn" class="add-product">+ Neues Produkt</button>
 
       <button id="scanBtn">
         QR scannen
@@ -83,6 +83,18 @@
       <h3 class="section-title">Buchungen im Zeitraum</h3>
       <div id="calendarBookings" class="timeline"></div>
     </section>
+
+    <section id="adminPage" class="app-page hidden">
+      <div class="page-heading">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Administration</h2></div>
+        <button id="adminAddProductBtn" type="button">+ Neues Produkt</button>
+      </div>
+      <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
+      <section class="admin-section">
+        <h3>Produkte verwalten</h3>
+        <div id="adminProductList" class="admin-product-list"></div>
+      </section>
+    </section>
   </main>
 
   <!-- Detailansicht -->
@@ -91,8 +103,8 @@
       type="button"
       class="close"
       data-close
-      aria-label="Schließen">
-      ×
+      aria-label="Zurück">
+      ←
     </button>
 
     <div id="detailContent"></div>
@@ -104,8 +116,8 @@
       type="button"
       class="close"
       data-close
-      aria-label="Schließen">
-      ×
+      aria-label="Zurück">
+      ←
     </button>
 
     <div class="qr-panel">
@@ -145,95 +157,25 @@
     </div>
   </dialog>
 
-  <!-- Ausleihen, Zurückgeben und Defekte -->
-  <dialog id="actionDialog">
-    <button
-      type="button"
-      class="close"
-      data-close
-      aria-label="Schließen">
-      ×
-    </button>
-
+  <!-- Projektbezogene Aktionen -->
+  <dialog id="actionDialog" class="reservation-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="actionForm">
-      <h2 id="actionTitle">
-        Buchung
-      </h2>
-
-      <input
-        type="hidden"
-        id="actionArticleId">
-
-      <label>
-        Aktion
-
-        <select id="actionType">
-          <option value="checkout">
-            Ausleihen
-          </option>
-
-          <option value="return">
-            Zurückgeben
-          </option>
-
-          <option value="defect">
-            Defekt melden
-          </option>
-
-          <option value="release">
-            Defekt freigeben
-          </option>
-        </select>
-      </label>
-
-      <label>
-        Menge
-
-        <input
-          id="quantity"
-          type="number"
-          min="1"
-          value="1"
-          required>
-      </label>
-
-      <label>
-        Person
-
-        <input
-          id="person"
-          autocomplete="name">
-      </label>
-
-      <label>
-        Projekt
-
-        <input id="project">
-      </label>
-
-      <label>
-        Rückgabe geplant
-
-        <input
-          id="dueDate"
-          type="date">
-      </label>
-
-      <label>
-        Standort
-
-        <input id="location">
-      </label>
-
-      <label>
-        Notiz
-
-        <textarea id="note"></textarea>
-      </label>
-
-      <button type="submit">
-        Speichern
-      </button>
+      <small>COCOMAC ESSENTIAL</small>
+      <h2 id="actionTitle">Buchung</h2>
+      <p id="actionHelp" class="dialog-intro"></p>
+      <input type="hidden" id="actionArticleId">
+      <input type="hidden" id="actionType">
+      <label>Projekt<select id="actionProject" required></select></label>
+      <div id="actionProjectInfo" class="reservation-project-info"></div>
+      <div class="form-grid two-columns">
+        <label>Von<input id="actionFrom" type="date" required></label>
+        <label>Bis<input id="actionTo" type="date" required></label>
+      </div>
+      <div id="actionAvailability" class="reservation-availability"></div>
+      <label>Menge<input id="quantity" type="number" min="1" value="1" required></label>
+      <label>Notiz<textarea id="note" placeholder="Optional"></textarea></label>
+      <button id="actionSubmitBtn" type="submit">Speichern</button>
     </form>
   </dialog>
 
@@ -243,8 +185,8 @@
       type="button"
       class="close"
       data-close
-      aria-label="Schließen">
-      ×
+      aria-label="Zurück">
+      ←
     </button>
 
     <form id="settingsForm">
@@ -293,7 +235,7 @@
 
   <!-- Neues Produkt -->
   <dialog id="productDialog" class="product-dialog">
-    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="productForm">
       <div>
         <small>COCOMAC ESSENTIAL</small>
@@ -332,12 +274,12 @@
 
   <!-- Neues Projekt -->
   <dialog id="projectDialog">
-    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="projectForm">
       <small>COCOMAC ESSENTIAL</small><h2>Neues Projekt</h2>
       <div class="form-columns">
         <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
-        <label>Projektnummer<input id="projectNumber" placeholder="optional"></label>
+        <label>Projektnummer<div id="projectNumberPreview" class="generated-number">Wird automatisch erzeugt</div></label>
         <label>Ansprechpartner<input id="projectContact" placeholder="optional"></label>
         <label>E-Mail 1<input id="projectEmail1" type="email" placeholder="optional"></label>
         <label>E-Mail 2<input id="projectEmail2" type="email" placeholder="optional"></label>
@@ -352,26 +294,33 @@
 
   <!-- Projektdetails -->
   <dialog id="projectDetailDialog" class="wide-dialog">
-    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <div id="projectDetailContent"></div>
   </dialog>
 
-  <!-- Equipment reservieren -->
-  <dialog id="reservationDialog">
-    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+  <!-- Equipment einem Projekt zuordnen -->
+  <dialog id="reservationDialog" class="reservation-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="reservationForm">
-      <h2>Equipment hinzufügen</h2>
+      <small>COCOMAC ESSENTIAL</small>
+      <h2 id="reservationDialogTitle">Equipment hinzufügen</h2>
+      <p class="dialog-intro">Wähle zuerst das Projekt. Zeitraum und Ansprechpartner werden automatisch übernommen.</p>
+
       <input id="reservationProjectId" type="hidden">
+      <label>Projekt<select id="reservationProject" required></select></label>
+      <div id="reservationProjectInfo" class="reservation-project-info"></div>
+
       <label>Produkt<select id="reservationProduct" required></select></label>
       <div id="reservationAvailability" class="availability-note"></div>
+
       <div class="form-columns">
         <label>Menge<input id="reservationQuantity" type="number" min="1" value="1" required></label>
         <label>Status<select id="reservationStatus"><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Storniert</option></select></label>
         <label>Von<input id="reservationFrom" type="date" required></label>
         <label>Bis<input id="reservationTo" type="date" required></label>
       </div>
-      <label>Notiz<textarea id="reservationNote" placeholder="optional"></textarea></label>
-      <button type="submit">Equipment hinzufügen</button>
+      <label>Notiz<textarea id="reservationNote" placeholder="z. B. Abholung durch Martin"></textarea></label>
+      <button id="reservationSubmitBtn" type="submit">Equipment hinzufügen</button>
     </form>
   </dialog>
 
@@ -381,8 +330,8 @@
       type="button"
       class="close"
       data-close
-      aria-label="Schließen">
-      ×
+      aria-label="Zurück">
+      ←
     </button>
 
     <h2>
@@ -437,8 +386,9 @@
     id="toast"
     class="toast hidden">
   </div>
+  <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=8" type="module"></script>
+  <script src="./app.js?v=10" type="module"></script>
 </body>
 </html>
