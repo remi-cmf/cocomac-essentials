@@ -23,6 +23,9 @@ let projects = [];
 let reservations = [];
 let activeProjectId = null;
 let reservationOrigin = 'project';
+let cloudSyncTimer = null;
+let cloudSyncRunning = false;
+let lastCloudSyncAt = 0;
 
 async function boot() {
   baseCatalog = await fetch('./data/equipment.json', { cache: 'no-store' })
@@ -35,6 +38,7 @@ async function boot() {
   await refreshCatalog();
   bind();
   render();
+  setupAutomaticCloudSync();
 
   if ('serviceWorker' in navigator) {
     try {
@@ -113,6 +117,39 @@ async function refreshCatalog() {
   [...localReservations, ...cloudReservations].forEach(item => { if (item?.id) reservationMap.set(String(item.id), normalizeReservation(item)); });
   reservations = [...reservationMap.values()];
   populateCategoryOptions();
+}
+
+async function syncFromCloud(options = {}) {
+  const { showMessage = false, force = false } = options;
+  if (cloudSyncRunning) return;
+  if (!force && Date.now() - lastCloudSyncAt < 4000) return;
+  cloudSyncRunning = true;
+  try {
+    await refreshCatalog();
+    render();
+    lastCloudSyncAt = Date.now();
+    if (showMessage) toast('Daten aus Google Sheets wurden aktualisiert.');
+  } catch (error) {
+    console.warn('Automatische Synchronisierung fehlgeschlagen:', error);
+    if (showMessage) toast('Synchronisierung fehlgeschlagen: ' + error.message);
+  } finally {
+    cloudSyncRunning = false;
+  }
+}
+
+function setupAutomaticCloudSync() {
+  window.addEventListener('focus', () => syncFromCloud({ force: true }));
+  window.addEventListener('pageshow', () => syncFromCloud({ force: true }));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncFromCloud({ force: true });
+  });
+  window.addEventListener('online', () => syncFromCloud({ showMessage: true, force: true }));
+  clearInterval(cloudSyncTimer);
+  cloudSyncTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine) {
+      syncFromCloud();
+    }
+  }, 20000);
 }
 
 function normalizeProduct(item) {

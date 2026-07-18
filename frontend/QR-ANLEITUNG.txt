@@ -12,4 +12,4 @@ Die QR-Codes enthalten aktuell nur die Artikel-ID, damit sie schon vor der Domai
 Lokal starten:
 1. Terminal im Ordner frontend öffnen.
 2. python3 -m http.server 8080
-3. http://localhost:8080 öffnen.
+3. https://remi-cmf.github.io/cocomac-essentials/ öffnen.
