@@ -23,9 +23,18 @@
       <h1>Equipment</h1>
     </div>
 
-    <button id="installBtn" class="ghost hidden">
-      Installieren
-    </button>
+    <div class="topbar-actions">
+      <button id="installBtn" class="ghost hidden">Installieren</button>
+      <button id="menuBtn" class="menu-button" type="button" aria-label="Menü öffnen" aria-expanded="false">☰</button>
+      <div id="mainMenu" class="main-menu hidden" role="menu">
+        <button type="button" class="menu-nav active" data-page="equipmentPage">Equipment</button>
+        <button type="button" class="menu-nav" data-page="projectsPage">Projekte</button>
+        <button type="button" class="menu-nav" data-page="calendarPage">Kalender</button>
+        <button type="button" class="menu-nav" data-page="adminPage">Administration</button>
+        <hr>
+        <button type="button" id="menuSettingsBtn">Einstellungen</button>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -33,12 +42,7 @@
       Testmodus: Daten werden nur auf diesem Gerät gespeichert.
     </section>
 
-    <nav class="app-nav" aria-label="Hauptnavigation">
-      <button type="button" class="nav-btn active" data-page="equipmentPage">Equipment</button>
-      <button type="button" class="nav-btn ghost" data-page="projectsPage">Projekte</button>
-      <button type="button" class="nav-btn ghost" data-page="calendarPage">Kalender</button>
-      <button type="button" class="nav-btn ghost" data-page="adminPage">Administration</button>
-    </nav>
+
 
     <section id="equipmentPage" class="app-page active">
     <section class="stats" id="stats"></section>
@@ -54,9 +58,6 @@
         QR scannen
       </button>
 
-      <button id="settingsBtn" class="ghost">
-        Einstellungen
-      </button>
     </section>
 
     <section id="list" class="grid"></section>
@@ -276,7 +277,8 @@
   <dialog id="projectDialog">
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="projectForm">
-      <small>COCOMAC ESSENTIAL</small><h2>Neues Projekt</h2>
+      <input id="projectEditId" type="hidden">
+      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2>
       <div class="form-columns">
         <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
         <label>Projektnummer<div id="projectNumberPreview" class="generated-number">Wird automatisch erzeugt</div></label>
@@ -288,7 +290,7 @@
         <label>Ende<input id="projectEnd" type="date" required></label>
       </div>
       <label>Notiz<textarea id="projectNotes" placeholder="optional"></textarea></label>
-      <button type="submit">Projekt speichern</button>
+      <button id="projectSubmitBtn" type="submit">Projekt speichern</button>
     </form>
   </dialog>
 
@@ -307,6 +309,7 @@
       <p class="dialog-intro">Wähle zuerst das Projekt. Zeitraum und Ansprechpartner werden automatisch übernommen.</p>
 
       <input id="reservationProjectId" type="hidden">
+      <input id="reservationEditId" type="hidden">
       <label>Projekt<select id="reservationProject" required></select></label>
       <div id="reservationProjectInfo" class="reservation-project-info"></div>
 
@@ -320,7 +323,7 @@
         <label>Bis<input id="reservationTo" type="date" required></label>
       </div>
       <label>Notiz<textarea id="reservationNote" placeholder="z. B. Abholung durch Martin"></textarea></label>
-      <button id="reservationSubmitBtn" type="submit">Equipment hinzufügen</button>
+      <div class="reservation-form-actions"><button id="reservationSubmitBtn" type="submit">Equipment hinzufügen</button><button id="deleteReservationBtn" type="button" class="danger hidden">Aus Projekt entfernen</button></div>
     </form>
   </dialog>
 
@@ -389,6 +392,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=10" type="module"></script>
+  <script src="./app.js?v=11" type="module"></script>
 </body>
 </html>

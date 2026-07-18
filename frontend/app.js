@@ -686,7 +686,12 @@ async function testCloudConnection(apiUrl) {
 
 function bind() {
   $('#search').oninput = render;
-  $$('.nav-btn').forEach(button => button.onclick = () => showPage(button.dataset.page));
+  $$('.menu-nav').forEach(button => button.onclick = () => { showPage(button.dataset.page); closeMainMenu(); });
+  $('#menuBtn').onclick = toggleMainMenu;
+  $('#menuSettingsBtn').onclick = () => { closeMainMenu(); openSettingsDialog(); };
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.topbar-actions')) closeMainMenu();
+  });
   $('#addProjectBtn').onclick = openProjectDialog;
   $('#adminAddProductBtn').onclick = openProductDialog;
   $('#projectForm').onsubmit = submitProject;
@@ -697,6 +702,8 @@ function bind() {
   $('#reservationProduct').onchange = updateReservationAvailability;
   $('#reservationFrom').onchange = updateReservationAvailability;
   $('#reservationTo').onchange = updateReservationAvailability;
+  $('#reservationQuantity').oninput = updateReservationAvailability;
+  $('#deleteReservationBtn').onclick = removeReservationFromProject;
   $('#refreshCalendarBtn').onclick = renderCalendar;
   $('#actionForm').onsubmit = submitMovement;
   $('#actionProject').onchange = updateActionProjectInfo;
@@ -874,8 +881,10 @@ async function stopCameraScan() {
 
 
 function normalizeProject(item) {
+  const rawNumber = String(item.number || item.id || '');
+  const number = rawNumber && !rawNumber.toUpperCase().startsWith('CME-') ? `CME-${rawNumber}` : rawNumber;
   return {
-    id: String(item.id || ''), name: String(item.name || ''), number: String(item.number || ''),
+    id: String(item.id || ''), name: String(item.name || ''), number,
     contact: String(item.contact || ''), email1: String(item.email1 || ''), email2: String(item.email2 || ''),
     start: dateOnly(item.start), end: dateOnly(item.end), status: String(item.status || 'Reserviert'), notes: String(item.notes || '')
   };
@@ -903,13 +912,47 @@ function reservedQuantity(productId, from, to, ignoreId='') {
   return reservations.filter(r => r.id !== ignoreId && r.productId === productId && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status) && (r.status === 'Defekt' || rangesOverlap(r.from,r.to,from,to)))
     .reduce((sum,r)=>sum+r.quantity,0);
 }
-function availableFor(productId, from, to) {
+function availableFor(productId, from, to, ignoreId='') {
   const product=catalog.find(p=>p.id===productId); if(!product) return 0;
-  return Math.max(0, product.total - reservedQuantity(productId,from,to));
+  return Math.max(0, product.total - reservedQuantity(productId,from,to,ignoreId));
+}
+function toggleMainMenu() {
+  const menu = $('#mainMenu');
+  const open = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !open);
+  $('#menuBtn').setAttribute('aria-expanded', String(open));
+}
+function closeMainMenu() {
+  $('#mainMenu')?.classList.add('hidden');
+  $('#menuBtn')?.setAttribute('aria-expanded','false');
+}
+function openSettingsDialog() {
+  const currentSettings = settings();
+  $('#apiUrl').value = currentSettings.apiUrl || '';
+  $('#cloudMode').checked = Boolean(currentSettings.cloudMode);
+  $('#settingsDialog').showModal();
+}
+async function deleteProject(projectId) {
+  const project = projects.find(item => item.id === projectId);
+  if (!project) return;
+  const linked = reservations.filter(item => item.projectId === projectId && item.status !== 'Storniert');
+  if (linked.length) return toast('Das Projekt enthält noch Buchungen. Entferne oder storniere diese zuerst.');
+  if (!confirm(`Projekt „${project.name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  try {
+    if (settings().cloudMode) await sendCloudAction({action:'deleteProject',payload:{projectId}});
+    const local = readJson(LOCAL_PROJECTS_KEY, []).filter(item => item.id !== projectId);
+    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(local));
+    $('#projectDetailDialog').close();
+    await refreshCatalog(); render(); showPage('projectsPage'); toast('Projekt gelöscht.');
+  } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
 }
 function showPage(pageId) {
   $$('.app-page').forEach(page => page.classList.toggle('hidden', page.id !== pageId));
-  $$('.nav-btn').forEach(btn => { const active=btn.dataset.page===pageId; btn.classList.toggle('active',active); btn.classList.toggle('ghost',!active); });
+  $$('.menu-nav').forEach(btn => btn.classList.toggle('active', btn.dataset.page === pageId));
+  const titles = {equipmentPage:'Equipment',projectsPage:'Projekte',calendarPage:'Kalender',adminPage:'Administration'};
+  const title = titles[pageId] || 'Equipment';
+  const heading = document.querySelector('.topbar h1');
+  if (heading) heading.textContent = title;
   if(pageId==='calendarPage') renderCalendar();
 }
 function renderProjects() {
@@ -923,11 +966,29 @@ function renderProjects() {
   }).join('') : '<div class="empty-state">Noch keine Projekte angelegt.</div>';
   $$('[data-project-id]').forEach(card=>card.onclick=()=>openProjectDetail(card.dataset.projectId));
 }
-function openProjectDialog() {
+function openProjectDialog(projectId = '') {
   $('#projectForm').reset();
-  $('#projectStart').value=todayIso();
-  $('#projectEnd').value=addDaysIso(7);
-  updateProjectNumberPreview();
+  $('#projectEditId').value = projectId;
+  const project = projects.find(item => item.id === projectId);
+  if (project) {
+    $('#projectDialogTitle').textContent = 'Projekt bearbeiten';
+    $('#projectSubmitBtn').textContent = 'Änderungen speichern';
+    $('#projectName').value = project.name;
+    $('#projectContact').value = project.contact;
+    $('#projectEmail1').value = project.email1;
+    $('#projectEmail2').value = project.email2;
+    $('#projectStatus').value = project.status;
+    $('#projectStart').value = project.start;
+    $('#projectEnd').value = project.end;
+    $('#projectNotes').value = project.notes;
+    $('#projectNumberPreview').textContent = project.number || project.id;
+  } else {
+    $('#projectDialogTitle').textContent = 'Neues Projekt';
+    $('#projectSubmitBtn').textContent = 'Projekt speichern';
+    $('#projectStart').value=todayIso();
+    $('#projectEnd').value=addDaysIso(7);
+    updateProjectNumberPreview();
+  }
   $('#projectDialog').showModal();
 }
 function projectNameCode(name) {
@@ -939,19 +1000,23 @@ function projectDateCode(date) {
   return `${month}${day}${String(year).slice(-2)}`;
 }
 function nextProjectNumber(name, start) {
-  const base = `${projectNameCode(name)}-${projectDateCode(start)}`;
+  const base = `CME-${projectNameCode(name)}-${projectDateCode(start)}`;
   const used = projects.map(p => p.number || p.id).filter(value => String(value).startsWith(base + '-')).map(value => Number(String(value).split('-').pop())).filter(Number.isFinite);
   return `${base}-${String((used.length ? Math.max(...used) : 0) + 1).padStart(3,'0')}`;
 }
 function updateProjectNumberPreview() {
+  const editId = $('#projectEditId')?.value;
+  if (editId) { const current = projects.find(item => item.id === editId); if ($('#projectNumberPreview')) $('#projectNumberPreview').textContent = current?.number || current?.id || editId; return; }
   const value = nextProjectNumber($('#projectName')?.value || '', $('#projectStart')?.value || todayIso());
   if ($('#projectNumberPreview')) $('#projectNumberPreview').textContent = value;
 }
 function nextProjectId(name, start) { return nextProjectNumber(name, start); }
 async function submitProject(event) {
   event.preventDefault();
-  const generatedNumber = nextProjectNumber($('#projectName').value.trim(), $('#projectStart').value);
-  const project=normalizeProject({ id:generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
+  const editId = $('#projectEditId').value;
+  const existing = projects.find(item => item.id === editId);
+  const generatedNumber = existing?.number || existing?.id || nextProjectNumber($('#projectName').value.trim(), $('#projectStart').value);
+  const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   if(settings().cloudMode) await sendCloudAction({action:'saveProject',payload:project});
@@ -962,8 +1027,12 @@ function projectReservations(projectId) { return reservations.filter(r=>r.projec
 function openProjectDetail(projectId) {
   const p=projects.find(x=>x.id===projectId); if(!p) return toast('Projekt nicht gefunden.'); activeProjectId=p.id;
   const rows=projectReservations(p.id);
-  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="printProjectBtn" type="button" class="ghost">Beleg / PDF drucken</button>${p.email1?'<button id="emailProjectBtn" type="button" class="ghost">Per E-Mail senden</button>':''}</div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<div class="booking-row"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><span class="status-badge">${escapeHtml(r.status)}</span></div>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
-  $('#addReservationBtn').onclick=()=>openReservationDialog(p.id); $('#printProjectBtn').onclick=()=>printProjectDocument(p.id);
+  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="printProjectBtn" type="button" class="ghost">Beleg / PDF drucken</button>${p.email1?'<button id="emailProjectBtn" type="button" class="ghost">Per E-Mail senden</button>':''}<button id="deleteProjectBtn" type="button" class="danger">Projekt löschen</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+  $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
+  $$('[data-edit-reservation]').forEach(button => button.onclick = () => openReservationDialog(p.id, '', 'project', button.dataset.editReservation));
+  $('#editProjectBtn').onclick=()=>{ $('#projectDetailDialog').close(); openProjectDialog(p.id); };
+  $('#deleteProjectBtn').onclick=()=>deleteProject(p.id);
+  $('#printProjectBtn').onclick=()=>printProjectDocument(p.id);
   if($('#emailProjectBtn')) $('#emailProjectBtn').onclick=()=>emailProjectDocument(p.id);
   $('#projectDetailDialog').showModal();
 }
@@ -972,9 +1041,11 @@ function projectOptionLabel(project) {
   return `${project.name}${number} (${formatDate(project.start)}–${formatDate(project.end)})`;
 }
 
-function openReservationDialog(projectId = '', productId = '', origin = 'project') {
+function openReservationDialog(projectId = '', productId = '', origin = 'project', reservationId = '') {
   reservationOrigin = origin;
   $('#reservationForm').reset();
+  $('#reservationEditId').value = reservationId;
+  const existingReservation = reservations.find(item => item.id === reservationId);
 
   const activeProjects = projects
     .filter(project => !['Abgeschlossen', 'Zurückgegeben'].includes(project.status))
@@ -998,12 +1069,25 @@ function openReservationDialog(projectId = '', productId = '', origin = 'project
   if (productId && catalog.some(product => product.id === productId)) {
     $('#reservationProduct').value = productId;
   }
+  if (existingReservation) {
+    $('#reservationProject').value = existingReservation.projectId;
+    $('#reservationProduct').value = existingReservation.productId;
+  }
 
-  $('#reservationProduct').disabled = Boolean(productId && origin === 'equipment');
-  $('#reservationDialogTitle').textContent = origin === 'equipment' ? 'Produkt ausleihen' : 'Equipment hinzufügen';
-  $('#reservationSubmitBtn').textContent = origin === 'equipment' ? 'Für Projekt reservieren' : 'Equipment hinzufügen';
+  $('#reservationProduct').disabled = Boolean(existingReservation || (productId && origin === 'equipment'));
+  $('#reservationProject').disabled = Boolean(existingReservation);
+  $('#reservationDialogTitle').textContent = existingReservation ? 'Equipment-Buchung bearbeiten' : (origin === 'equipment' ? 'Produkt ausleihen' : 'Equipment hinzufügen');
+  $('#reservationSubmitBtn').textContent = existingReservation ? 'Änderungen speichern' : (origin === 'equipment' ? 'Für Projekt reservieren' : 'Equipment hinzufügen');
+  $('#deleteReservationBtn').classList.toggle('hidden', !existingReservation);
 
   updateReservationProjectInfo();
+  if (existingReservation) {
+    $('#reservationQuantity').value = existingReservation.quantity;
+    $('#reservationStatus').value = existingReservation.status;
+    $('#reservationFrom').value = existingReservation.from;
+    $('#reservationTo').value = existingReservation.to;
+    $('#reservationNote').value = existingReservation.note;
+  }
   updateReservationAvailability();
   $('#reservationDialog').showModal();
 }
@@ -1023,8 +1107,10 @@ function updateReservationProjectInfo() {
     return;
   }
 
-  $('#reservationFrom').value = project.start;
-  $('#reservationTo').value = project.end;
+  if (!$('#reservationEditId').value) {
+    $('#reservationFrom').value = project.start;
+    $('#reservationTo').value = project.end;
+  }
   const emails = [project.email1, project.email2].filter(Boolean).join(', ') || 'Keine E-Mail hinterlegt';
   $('#reservationProjectInfo').innerHTML = `
     <div class="reservation-project-head">
@@ -1060,8 +1146,9 @@ function updateReservationAvailability() {
 
   const product = catalog.find(item => item.id === id);
   if (!product) return;
-  const available = availableFor(id, from, to);
-  const reserved = reservedQuantity(id, from, to);
+  const editId = $('#reservationEditId')?.value || '';
+  const available = availableFor(id, from, to, editId);
+  const reserved = reservedQuantity(id, from, to, editId);
   const statusClass = available === 0 ? 'availability-danger' : '';
   $('#reservationAvailability').innerHTML = `
     <div class="reservation-product-summary">
@@ -1077,8 +1164,9 @@ function updateReservationAvailability() {
 
 async function submitReservation(event) {
   event.preventDefault();
+  const editId = $('#reservationEditId').value;
   const r = normalizeReservation({
-    id: crypto.randomUUID(),
+    id: editId || crypto.randomUUID(),
     projectId: $('#reservationProject').value,
     productId: $('#reservationProduct').value,
     quantity: Number($('#reservationQuantity').value),
@@ -1089,7 +1177,7 @@ async function submitReservation(event) {
   });
   if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) return toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
   if (r.to < r.from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-  const available = availableFor(r.productId, r.from, r.to);
+  const available = availableFor(r.productId, r.from, r.to, r.id);
   if (r.quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
   if (settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:r});
   const local = readJson(LOCAL_RESERVATIONS_KEY,[]).filter(x=>x.id!==r.id);
@@ -1105,7 +1193,31 @@ async function submitReservation(event) {
   } else {
     openDetail(r.productId);
   }
-  toast('Equipment wurde dem Projekt zugeordnet.');
+  toast(editId ? 'Equipment-Buchung wurde aktualisiert.' : 'Equipment wurde dem Projekt zugeordnet.');
+}
+
+
+async function removeReservationFromProject() {
+  const reservationId = $('#reservationEditId').value;
+  const reservation = reservations.find(item => item.id === reservationId);
+  if (!reservation) return toast('Buchung nicht gefunden.');
+  const product = catalog.find(item => item.id === reservation.productId);
+  if (!confirm(`${product?.name || reservation.productId} wirklich aus diesem Projekt entfernen?`)) return;
+  const cancelled = normalizeReservation({...reservation, status:'Storniert'});
+  try {
+    if (settings().cloudMode) await sendCloudAction({action:'saveReservation', payload:cancelled});
+    const local = readJson(LOCAL_RESERVATIONS_KEY, []).filter(item => item.id !== cancelled.id);
+    local.push(cancelled);
+    localStorage.setItem(LOCAL_RESERVATIONS_KEY, JSON.stringify(local));
+    await refreshCatalog();
+    render();
+    $('#reservationDialog').close();
+    $('#projectDetailDialog').close();
+    openProjectDetail(cancelled.projectId);
+    toast('Equipment wurde aus dem Projekt entfernt.');
+  } catch (error) {
+    toast(error.message || 'Buchung konnte nicht entfernt werden.');
+  }
 }
 
 
