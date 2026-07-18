@@ -507,46 +507,56 @@ async function startCameraScan() {
   $('#cameraScanBtn')?.classList.add('hidden');
   $('#stopScannerBtn')?.classList.remove('hidden');
 
+  const onScanSuccess = async decodedText => {
+    if (scanResultHandled) return;
+    scanResultHandled = true;
+
+    const id = extractArticleId(decodedText);
+    setScannerStatus(`Erkannt: ${id}`);
+
+    await stopCameraScan();
+    $('#scanDialog').close();
+    openDetail(id);
+
+    window.setTimeout(() => {
+      scanResultHandled = false;
+    }, 1000);
+  };
+
+  const config = {
+    fps: 10,
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      const size = Math.floor(
+        Math.min(viewfinderWidth, viewfinderHeight) * 0.72
+      );
+      return { width: size, height: size };
+    },
+    disableFlip: false
+  };
+
   try {
     html5QrCode = new window.Html5Qrcode('qrReader');
 
-    const config = {
-      fps: 10,
-      qrbox: (viewfinderWidth, viewfinderHeight) => {
-        const size = Math.floor(
-          Math.min(viewfinderWidth, viewfinderHeight) * 0.72
-        );
+    let cameraConfig = { facingMode: 'environment' };
 
-        return {
-          width: size,
-          height: size
-        };
-      },
-      aspectRatio: 1,
-      disableFlip: false
-    };
+    try {
+      const cameras = await window.Html5Qrcode.getCameras();
+      if (cameras?.length) {
+        const rearCamera = cameras.find(camera =>
+          /back|rear|environment|rück/i.test(camera.label || '')
+        );
+        cameraConfig = (rearCamera || cameras[cameras.length - 1]).id;
+      }
+    } catch (cameraListError) {
+      console.warn('Kameraliste konnte nicht gelesen werden:', cameraListError);
+    }
 
     await html5QrCode.start(
-      { facingMode: { ideal: 'environment' } },
+      cameraConfig,
       config,
-      async decodedText => {
-        if (scanResultHandled) return;
-        scanResultHandled = true;
-
-        const id = extractArticleId(decodedText);
-        setScannerStatus(`Erkannt: ${id}`);
-
-        await stopCameraScan();
-        $('#scanDialog').close();
-
-        openDetail(id);
-
-        window.setTimeout(() => {
-          scanResultHandled = false;
-        }, 1000);
-      },
+      onScanSuccess,
       () => {
-        // Fehlversuche während der Suche werden nicht angezeigt.
+        // Während der Suche wird nicht jeder Fehlversuch angezeigt.
       }
     );
 
@@ -559,28 +569,36 @@ async function startCameraScan() {
     $('#cameraScanBtn')?.classList.remove('hidden');
     $('#stopScannerBtn')?.classList.add('hidden');
 
-    const errorText = String(error || '').toLowerCase();
+    const errorText = String(error?.message || error || '').toLowerCase();
 
     if (
       error?.name === 'NotAllowedError' ||
       errorText.includes('permission') ||
-      errorText.includes('notallowed')
+      errorText.includes('notallowed') ||
+      errorText.includes('denied')
     ) {
       setScannerStatus(
-        'Der Kamerazugriff wurde nicht erlaubt. Erlaube die Kamera in den Browser-Einstellungen.'
+        'Der Kamerazugriff ist blockiert. Öffne auf dem iPhone Einstellungen → Safari → Kamera und wähle „Erlauben“. Öffne die App danach neu.'
       );
     } else if (
       error?.name === 'NotFoundError' ||
-      errorText.includes('notfound')
+      errorText.includes('notfound') ||
+      errorText.includes('no camera')
     ) {
       setScannerStatus('Auf diesem Gerät wurde keine Kamera gefunden.');
-    } else if (!window.isSecureContext) {
+    } else if (
+      error?.name === 'NotReadableError' ||
+      errorText.includes('notreadable') ||
+      errorText.includes('in use')
+    ) {
       setScannerStatus(
-        'Der Scanner benötigt eine sichere HTTPS-Verbindung.'
+        'Die Kamera wird gerade von einer anderen App verwendet. Schließe andere Kamera-Apps und versuche es erneut.'
       );
+    } else if (!window.isSecureContext) {
+      setScannerStatus('Der Scanner benötigt eine sichere HTTPS-Verbindung.');
     } else {
       setScannerStatus(
-        'Die Kamera konnte nicht gestartet werden. Lade die Seite neu und versuche es noch einmal.'
+        'Die Kamera konnte nicht gestartet werden. Schließe die App vollständig, öffne sie erneut und erlaube den Kamerazugriff.'
       );
     }
 

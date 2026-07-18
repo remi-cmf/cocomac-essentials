@@ -1,4 +1,4 @@
-const CACHE = 'cocomac-essential-v3';
+const CACHE = 'cocomac-essential-v4';
 const ASSETS = [
   './',
   './index.html',
