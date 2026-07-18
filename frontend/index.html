@@ -33,6 +33,13 @@
       Testmodus: Daten werden nur auf diesem Gerät gespeichert.
     </section>
 
+    <nav class="app-nav" aria-label="Hauptnavigation">
+      <button type="button" class="nav-btn active" data-page="equipmentPage">Equipment</button>
+      <button type="button" class="nav-btn ghost" data-page="projectsPage">Projekte</button>
+      <button type="button" class="nav-btn ghost" data-page="calendarPage">Kalender</button>
+    </nav>
+
+    <section id="equipmentPage" class="app-page active">
     <section class="stats" id="stats"></section>
 
     <section class="toolbar">
@@ -53,6 +60,29 @@
     </section>
 
     <section id="list" class="grid"></section>
+    </section>
+
+    <section id="projectsPage" class="app-page hidden">
+      <div class="page-heading">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Projekte</h2></div>
+        <button id="addProjectBtn" type="button">+ Neues Projekt</button>
+      </div>
+      <section id="projectStats" class="stats"></section>
+      <section id="projectList" class="project-grid"></section>
+    </section>
+
+    <section id="calendarPage" class="app-page hidden">
+      <div class="page-heading"><div><small>COCOMAC ESSENTIAL</small><h2>Verfügbarkeit</h2></div></div>
+      <div class="calendar-filter">
+        <label>Von<input id="calendarFrom" type="date"></label>
+        <label>Bis<input id="calendarTo" type="date"></label>
+        <button id="refreshCalendarBtn" type="button">Zeitraum prüfen</button>
+      </div>
+      <div id="calendarSummary"></div>
+      <div id="availabilityList" class="availability-list"></div>
+      <h3 class="section-title">Buchungen im Zeitraum</h3>
+      <div id="calendarBookings" class="timeline"></div>
+    </section>
   </main>
 
   <!-- Detailansicht -->
@@ -282,8 +312,11 @@
 
       <div class="form-columns">
         <label>Name<input id="productName" required placeholder="z. B. Wasserkocher"></label>
-        <label>Kategorie<input id="productCategory" required placeholder="z. B. Küche" list="categorySuggestions"></label>
-        <datalist id="categorySuggestions"><option value="Küche"><option value="Kamera"><option value="Licht"><option value="Ton"><option value="Büro"><option value="Transport"><option value="Sonstiges"></datalist>
+        <label>Kategorie
+          <select id="productCategory" required>
+            <option value="">Kategorie auswählen</option>
+          </select>
+        </label>
         <label>Standort<input id="productLocation" required placeholder="z. B. Keller"></label>
         <label>Menge<input id="productTotal" type="number" min="1" value="1" required></label>
         <label>Zustand<select id="productCondition"><option>Sehr gut</option><option selected>Gut</option><option>Gebraucht</option><option>Reparatur nötig</option></select></label>
@@ -294,6 +327,51 @@
       <label>Beschreibung<textarea id="productDescription" placeholder="optional"></textarea></label>
       <label>Notiz<textarea id="productNotes" placeholder="optional"></textarea></label>
       <button id="saveProductBtn" type="submit">Produkt speichern</button>
+    </form>
+  </dialog>
+
+  <!-- Neues Projekt -->
+  <dialog id="projectDialog">
+    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <form id="projectForm">
+      <small>COCOMAC ESSENTIAL</small><h2>Neues Projekt</h2>
+      <div class="form-columns">
+        <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
+        <label>Projektnummer<input id="projectNumber" placeholder="optional"></label>
+        <label>Ansprechpartner<input id="projectContact" placeholder="optional"></label>
+        <label>E-Mail 1<input id="projectEmail1" type="email" placeholder="optional"></label>
+        <label>E-Mail 2<input id="projectEmail2" type="email" placeholder="optional"></label>
+        <label>Status<select id="projectStatus"><option>Entwurf</option><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Abgeschlossen</option></select></label>
+        <label>Start<input id="projectStart" type="date" required></label>
+        <label>Ende<input id="projectEnd" type="date" required></label>
+      </div>
+      <label>Notiz<textarea id="projectNotes" placeholder="optional"></textarea></label>
+      <button type="submit">Projekt speichern</button>
+    </form>
+  </dialog>
+
+  <!-- Projektdetails -->
+  <dialog id="projectDetailDialog" class="wide-dialog">
+    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <div id="projectDetailContent"></div>
+  </dialog>
+
+  <!-- Equipment reservieren -->
+  <dialog id="reservationDialog">
+    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <form id="reservationForm">
+      <h2>Equipment hinzufügen</h2>
+      <input id="reservationProjectId" type="hidden">
+      <label>Produkt<select id="reservationProduct" required></select></label>
+      <div id="reservationAvailability" class="availability-note"></div>
+      <div class="form-columns">
+        <label>Menge<input id="reservationQuantity" type="number" min="1" value="1" required></label>
+        <label>Status<select id="reservationStatus"><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Storniert</option></select></label>
+        <label>Von<input id="reservationFrom" type="date" required></label>
+        <label>Bis<input id="reservationTo" type="date" required></label>
+      </div>
+      <label>Notiz<textarea id="reservationNote" placeholder="optional"></textarea></label>
+      <button type="submit">Equipment hinzufügen</button>
     </form>
   </dialog>
 

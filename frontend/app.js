@@ -4,6 +4,8 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const LOCAL_KEY = 'cocomac-essential-state-v1';
 const SETTINGS_KEY = 'cocomac-essential-settings-v1';
 const LOCAL_PRODUCTS_KEY = 'cocomac-essential-products-v1';
+const LOCAL_PROJECTS_KEY = 'cocomac-essential-projects-v1';
+const LOCAL_RESERVATIONS_KEY = 'cocomac-essential-reservations-v1';
 const PRODUCT_URL_BASE = 'https://remi-cmf.github.io/cocomac-essentials/';
 
 let baseCatalog = [];
@@ -14,6 +16,9 @@ let html5QrCode = null;
 let scannerRunning = false;
 let scanResultHandled = false;
 let selectedProductImage = null;
+let projects = [];
+let reservations = [];
+let activeProjectId = null;
 
 async function boot() {
   baseCatalog = await fetch('./data/equipment.json', { cache: 'no-store' })
@@ -54,14 +59,21 @@ function settings() {
 
 async function refreshCatalog() {
   const localProducts = readJson(LOCAL_PRODUCTS_KEY, []);
+  const localProjects = readJson(LOCAL_PROJECTS_KEY, []);
+  const localReservations = readJson(LOCAL_RESERVATIONS_KEY, []);
   let cloudProducts = [];
-  const currentSettings = settings();
+  let cloudProjects = [];
+  let cloudReservations = [];
 
+  const currentSettings = settings();
   if (currentSettings.cloudMode && currentSettings.apiUrl) {
     try {
-      cloudProducts = await loadCloudProducts(currentSettings.apiUrl);
+      const snapshot = await loadCloudSnapshot(currentSettings.apiUrl);
+      cloudProducts = snapshot.products || [];
+      cloudProjects = snapshot.projects || [];
+      cloudReservations = snapshot.reservations || [];
     } catch (error) {
-      console.warn('Cloud-Produkte konnten nicht geladen werden:', error);
+      console.warn('Cloud-Daten konnten nicht geladen werden:', error);
     }
   }
 
@@ -70,6 +82,15 @@ async function refreshCatalog() {
     if (item?.id) merged.set(String(item.id).toUpperCase(), normalizeProduct(item));
   });
   catalog = [...merged.values()];
+
+  const projectMap = new Map();
+  [...localProjects, ...cloudProjects].forEach(item => { if (item?.id) projectMap.set(String(item.id), normalizeProject(item)); });
+  projects = [...projectMap.values()].sort((a,b) => String(b.start).localeCompare(String(a.start)));
+
+  const reservationMap = new Map();
+  [...localReservations, ...cloudReservations].forEach(item => { if (item?.id) reservationMap.set(String(item.id), normalizeReservation(item)); });
+  reservations = [...reservationMap.values()];
+  populateCategoryOptions();
 }
 
 function normalizeProduct(item) {
@@ -172,6 +193,8 @@ function render() {
     ? 'Cloud-Modus aktiv: Produkte und Buchungen werden mit Google Sheets synchronisiert.'
     : 'Testmodus: Neue Produkte und Buchungen werden nur auf diesem Gerät gespeichert.';
   $('#syncBanner').classList.toggle('demo', !currentSettings.cloudMode);
+  renderProjects();
+  renderCalendar();
 }
 
 function openDetail(id) {
@@ -332,7 +355,31 @@ async function submitMovement(event) {
   toast(currentSettings.cloudMode ? 'Buchung gespeichert und an Google Sheets gesendet.' : 'Buchung lokal gespeichert.');
 }
 
+function populateCategoryOptions() {
+  const select = $('#productCategory');
+  if (!select) return;
+
+  const previousValue = select.value;
+  const categories = [...new Set(
+    catalog
+      .map(item => String(item.category || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+
+  select.innerHTML = [
+    '<option value="">Kategorie auswählen</option>',
+    ...categories.map(category =>
+      `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`
+    )
+  ].join('');
+
+  if (previousValue && categories.includes(previousValue)) {
+    select.value = previousValue;
+  }
+}
+
 function openProductDialog() {
+  populateCategoryOptions();
   $('#productForm').reset();
   selectedProductImage = null;
   $('#productImagePreview').innerHTML = '<span>Foto hier ablegen oder auswählen</span>';
@@ -511,28 +558,27 @@ async function sendCloudAction(data) {
   return true;
 }
 
-function loadCloudProducts(apiUrl) {
+function loadCloudSnapshot(apiUrl) {
   const url = cleanApiUrl(apiUrl);
   return new Promise((resolve, reject) => {
-    const callbackName = `cocomacProducts_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const callbackName = `cocomacSnapshot_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement('script');
-    const timeout = setTimeout(() => cleanup(new Error('Zeitüberschreitung beim Laden der Produkte.')), 12000);
-
-    function cleanup(error, products) {
-      clearTimeout(timeout);
-      delete window[callbackName];
-      script.remove();
-      error ? reject(error) : resolve(Array.isArray(products) ? products : []);
+    const timeout = setTimeout(() => cleanup(new Error('Zeitüberschreitung beim Laden der Cloud-Daten.')), 15000);
+    function cleanup(error, data) {
+      clearTimeout(timeout); delete window[callbackName]; script.remove();
+      error ? reject(error) : resolve(data || { products: [], projects: [], reservations: [] });
     }
-
-    window[callbackName] = response => {
-      if (response?.ok === false) cleanup(new Error(response.error || 'Cloud-Fehler'));
-      else cleanup(null, response?.products || []);
-    };
+    window[callbackName] = response => response?.ok === false
+      ? cleanup(new Error(response.error || 'Cloud-Fehler'))
+      : cleanup(null, response);
     script.onerror = () => cleanup(new Error('Backend konnte nicht erreicht werden.'));
-    script.src = `${url}?action=listProducts&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
+    script.src = `${url}?action=snapshot&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
     document.head.appendChild(script);
   });
+}
+
+function loadCloudProducts(apiUrl) {
+  return loadCloudSnapshot(apiUrl).then(data => data.products || []);
 }
 
 async function testCloudConnection(apiUrl) {
@@ -542,10 +588,18 @@ async function testCloudConnection(apiUrl) {
 
 function bind() {
   $('#search').oninput = render;
+  $$('.nav-btn').forEach(button => button.onclick = () => showPage(button.dataset.page));
+  $('#addProjectBtn').onclick = openProjectDialog;
+  $('#projectForm').onsubmit = submitProject;
+  $('#reservationForm').onsubmit = submitReservation;
+  $('#reservationProduct').onchange = updateReservationAvailability;
+  $('#reservationFrom').onchange = updateReservationAvailability;
+  $('#reservationTo').onchange = updateReservationAvailability;
+  $('#refreshCalendarBtn').onclick = renderCalendar;
   $('#actionForm').onsubmit = submitMovement;
   $('#productForm').onsubmit = submitProduct;
   $('#addProductBtn').onclick = openProductDialog;
-  $('#productCategory').oninput = updateProductIdPreview;
+  $('#productCategory').onchange = updateProductIdPreview;
   bindImageUpload();
 
   $('#settingsBtn').onclick = () => {
@@ -709,6 +763,126 @@ async function stopCameraScan() {
   $('#cameraScanBtn')?.classList.remove('hidden');
   $('#stopScannerBtn')?.classList.add('hidden');
   setScannerStatus('');
+}
+
+
+function normalizeProject(item) {
+  return {
+    id: String(item.id || ''), name: String(item.name || ''), number: String(item.number || ''),
+    contact: String(item.contact || ''), email1: String(item.email1 || ''), email2: String(item.email2 || ''),
+    start: dateOnly(item.start), end: dateOnly(item.end), status: String(item.status || 'Reserviert'), notes: String(item.notes || '')
+  };
+}
+function normalizeReservation(item) {
+  return {
+    id: String(item.id || ''), projectId: String(item.projectId || ''), productId: String(item.productId || '').toUpperCase(),
+    quantity: Number(item.quantity || 0), from: dateOnly(item.from), to: dateOnly(item.to),
+    status: String(item.status || 'Reserviert'), note: String(item.note || '')
+  };
+}
+function dateOnly(value) {
+  if (!value) return '';
+  const text = String(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : text.slice(0,10);
+}
+function formatDate(value) {
+  if (!value) return '–';
+  const [y,m,d] = value.split('-'); return `${d}.${m}.${y}`;
+}
+function todayIso() { return new Date().toISOString().slice(0,10); }
+function addDaysIso(days) { const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function rangesOverlap(a1,a2,b1,b2) { return a1 <= b2 && b1 <= a2; }
+function reservedQuantity(productId, from, to, ignoreId='') {
+  return reservations.filter(r => r.id !== ignoreId && r.productId === productId && r.status !== 'Storniert' && r.status !== 'Zurückgegeben' && rangesOverlap(r.from,r.to,from,to))
+    .reduce((sum,r)=>sum+r.quantity,0);
+}
+function availableFor(productId, from, to) {
+  const product=catalog.find(p=>p.id===productId); if(!product) return 0;
+  return Math.max(0, product.total - reservedQuantity(productId,from,to));
+}
+function showPage(pageId) {
+  $$('.app-page').forEach(page => page.classList.toggle('hidden', page.id !== pageId));
+  $$('.nav-btn').forEach(btn => { const active=btn.dataset.page===pageId; btn.classList.toggle('active',active); btn.classList.toggle('ghost',!active); });
+  if(pageId==='calendarPage') renderCalendar();
+}
+function renderProjects() {
+  if(!$('#projectList')) return;
+  const active=projects.filter(p=>!['Abgeschlossen','Zurückgegeben'].includes(p.status)).length;
+  $('#projectStats').innerHTML = [['Projekte',projects.length],['Aktiv',active],['Reservierungen',reservations.filter(r=>r.status==='Reserviert').length],['Ausgegeben',reservations.filter(r=>r.status==='Ausgegeben').length]].map(([l,v])=>`<div class="stat"><strong>${v}</strong><span>${l}</span></div>`).join('');
+  $('#projectList').innerHTML = projects.length ? projects.map(p=>{
+    const rows=reservations.filter(r=>r.projectId===p.id && r.status!=='Storniert');
+    const pieces=rows.reduce((s,r)=>s+r.quantity,0);
+    return `<article class="project-card" data-project-id="${escapeHtml(p.id)}"><div class="project-card-head"><span class="status-badge">${escapeHtml(p.status)}</span><small>${escapeHtml(p.number||p.id)}</small></div><h3>${escapeHtml(p.name)}</h3><p>${formatDate(p.start)} – ${formatDate(p.end)}</p><div class="meta">${rows.length} Artikelarten · ${pieces} Teile${p.contact?' · '+escapeHtml(p.contact):''}</div></article>`;
+  }).join('') : '<div class="empty-state">Noch keine Projekte angelegt.</div>';
+  $$('[data-project-id]').forEach(card=>card.onclick=()=>openProjectDetail(card.dataset.projectId));
+}
+function openProjectDialog() {
+  $('#projectForm').reset(); $('#projectStart').value=todayIso(); $('#projectEnd').value=addDaysIso(7); $('#projectDialog').showModal();
+}
+function nextProjectId() { return `PRJ-${new Date().getFullYear()}-${String(projects.length+1).padStart(3,'0')}`; }
+async function submitProject(event) {
+  event.preventDefault();
+  const project=normalizeProject({ id:nextProjectId(), name:$('#projectName').value.trim(), number:$('#projectNumber').value.trim(), contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
+  if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
+  if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
+  if(settings().cloudMode) await sendCloudAction({action:'saveProject',payload:project});
+  const local=readJson(LOCAL_PROJECTS_KEY,[]).filter(p=>p.id!==project.id); local.push(project); localStorage.setItem(LOCAL_PROJECTS_KEY,JSON.stringify(local));
+  await refreshCatalog(); render(); $('#projectDialog').close(); showPage('projectsPage'); openProjectDetail(project.id); toast('Projekt gespeichert.');
+}
+function projectReservations(projectId) { return reservations.filter(r=>r.projectId===projectId && r.status!=='Storniert'); }
+function openProjectDetail(projectId) {
+  const p=projects.find(x=>x.id===projectId); if(!p) return toast('Projekt nicht gefunden.'); activeProjectId=p.id;
+  const rows=projectReservations(p.id);
+  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="printProjectBtn" type="button" class="ghost">Beleg / PDF drucken</button>${p.email1?'<button id="emailProjectBtn" type="button" class="ghost">Per E-Mail senden</button>':''}</div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<div class="booking-row"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><span class="status-badge">${escapeHtml(r.status)}</span></div>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+  $('#addReservationBtn').onclick=()=>openReservationDialog(p.id); $('#printProjectBtn').onclick=()=>printProjectDocument(p.id);
+  if($('#emailProjectBtn')) $('#emailProjectBtn').onclick=()=>emailProjectDocument(p.id);
+  $('#projectDetailDialog').showModal();
+}
+function openReservationDialog(projectId) {
+  const p=projects.find(x=>x.id===projectId); if(!p)return;
+  $('#reservationForm').reset(); $('#reservationProjectId').value=p.id; $('#reservationFrom').value=p.start; $('#reservationTo').value=p.end;
+  $('#reservationProduct').innerHTML='<option value="">Produkt auswählen</option>'+catalog.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${escapeHtml(item.id)})</option>`).join('');
+  updateReservationAvailability(); $('#reservationDialog').showModal();
+}
+function updateReservationAvailability() {
+  const id=$('#reservationProduct')?.value, from=$('#reservationFrom')?.value, to=$('#reservationTo')?.value;
+  if(!id||!from||!to){ $('#reservationAvailability').textContent='Produkt und Zeitraum auswählen.'; return; }
+  const product=catalog.find(p=>p.id===id), available=availableFor(id,from,to), reserved=reservedQuantity(id,from,to);
+  $('#reservationAvailability').innerHTML=`<b>${available} von ${product.total} verfügbar</b><br><small>${reserved} Stück sind im gewählten Zeitraum bereits belegt.</small>`;
+  $('#reservationQuantity').max=String(available);
+}
+async function submitReservation(event) {
+  event.preventDefault();
+  const r=normalizeReservation({id:crypto.randomUUID(), projectId:$('#reservationProjectId').value, productId:$('#reservationProduct').value, quantity:Number($('#reservationQuantity').value), from:$('#reservationFrom').value, to:$('#reservationTo').value, status:$('#reservationStatus').value, note:$('#reservationNote').value.trim()});
+  if(!r.productId||!r.from||!r.to||r.quantity<1)return toast('Bitte alle Pflichtfelder ausfüllen.');
+  if(r.to<r.from)return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
+  const available=availableFor(r.productId,r.from,r.to); if(r.quantity>available)return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
+  if(settings().cloudMode) await sendCloudAction({action:'saveReservation',payload:r});
+  const local=readJson(LOCAL_RESERVATIONS_KEY,[]).filter(x=>x.id!==r.id); local.push(r); localStorage.setItem(LOCAL_RESERVATIONS_KEY,JSON.stringify(local));
+  await refreshCatalog(); render(); $('#reservationDialog').close(); $('#projectDetailDialog').close(); openProjectDetail(r.projectId); toast('Equipment wurde reserviert.');
+}
+function renderCalendar() {
+  if(!$('#calendarFrom')) return;
+  if(!$('#calendarFrom').value) $('#calendarFrom').value=todayIso();
+  if(!$('#calendarTo').value) $('#calendarTo').value=addDaysIso(14);
+  const from=$('#calendarFrom').value,to=$('#calendarTo').value;
+  if(to<from){$('#calendarSummary').innerHTML='<div class="banner demo">Bitte einen gültigen Zeitraum auswählen.</div>';return;}
+  const rows=catalog.map(item=>{const reserved=reservedQuantity(item.id,from,to);return {...item,reserved,free:Math.max(0,item.total-reserved)}}).sort((a,b)=>a.free-b.free||a.name.localeCompare(b.name,'de'));
+  $('#calendarSummary').innerHTML=`<div class="banner">Verfügbarkeit vom <b>${formatDate(from)}</b> bis <b>${formatDate(to)}</b></div>`;
+  $('#availabilityList').innerHTML=rows.map(item=>`<div class="availability-row"><div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · Bestand ${item.total}</small></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count"><b>${item.reserved}</b><small>belegt</small></div></div>`).join('');
+  const relevant=reservations.filter(r=>r.status!=='Storniert'&&rangesOverlap(r.from,r.to,from,to)).sort((a,b)=>a.from.localeCompare(b.from));
+  $('#calendarBookings').innerHTML=relevant.length?relevant.map(r=>{const p=projects.find(x=>x.id===r.projectId),item=catalog.find(x=>x.id===r.productId);return `<div class="timeline-item"><div class="timeline-date">${formatDate(r.from)}<br><small>bis ${formatDate(r.to)}</small></div><div><b>${escapeHtml(p?.name||r.projectId)}</b><br>${r.quantity} × ${escapeHtml(item?.name||r.productId)}<br><small>${escapeHtml(r.status)}</small></div></div>`}).join(''):'<div class="empty-state">Keine Buchungen in diesem Zeitraum.</div>';
+}
+function projectDocumentHtml(projectId) {
+  const p=projects.find(x=>x.id===projectId), rows=projectReservations(projectId);
+  const items=rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<tr><td>${r.quantity}</td><td>${escapeHtml(item?.name||r.productId)}</td><td>${escapeHtml(r.productId)}</td><td>${formatDate(r.from)}–${formatDate(r.to)}</td><td>${escapeHtml(r.status)}</td></tr>`}).join('');
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Equipment ${escapeHtml(p.name)}</title><style>body{font:14px Arial;padding:35px;color:#171716}h1{margin-bottom:4px}small{color:#666}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}.sign{margin-top:60px;display:flex;gap:80px}.line{border-top:1px solid;width:220px;padding-top:6px}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><p><b>Zeitraum:</b> ${formatDate(p.start)}–${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact||'–')}<br><b>Status:</b> ${escapeHtml(p.status)}</p><table><thead><tr><th>Menge</th><th>Equipment</th><th>ID</th><th>Zeitraum</th><th>Status</th></tr></thead><tbody>${items||'<tr><td colspan="5">Kein Equipment</td></tr>'}</tbody></table><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div></body></html>`;
+}
+function printProjectDocument(projectId) { const w=window.open('','_blank'); if(!w)return toast('Bitte Pop-ups erlauben.'); w.document.write(projectDocumentHtml(projectId)); w.document.close(); setTimeout(()=>w.print(),250); }
+async function emailProjectDocument(projectId) {
+  const p=projects.find(x=>x.id===projectId); if(!p?.email1)return toast('Keine E-Mail-Adresse hinterlegt.');
+  if(!settings().cloudMode)return toast('Der E-Mail-Versand ist nur im Cloud-Modus möglich.');
+  await sendCloudAction({action:'emailProject',payload:{projectId}}); toast(`Der Projektbeleg wird an ${[p.email1,p.email2].filter(Boolean).join(', ')} gesendet.`);
 }
 
 function escapeHtml(value) {
