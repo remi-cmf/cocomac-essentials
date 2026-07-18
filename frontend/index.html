@@ -41,6 +41,8 @@
         type="search"
         placeholder="Artikel, ID oder Kategorie suchen">
 
+      <button id="addProductBtn" class="add-product">+ Neues Produkt</button>
+
       <button id="scanBtn">
         QR scannen
       </button>
@@ -93,10 +95,8 @@
         class="qr-article-id">
       </strong>
 
-      <p class="qr-hint">
-        Der QR-Code enthält die Artikel-ID und funktioniert direkt mit dem
-        Scanner in dieser App.
-      </p>
+      <p class="qr-hint">Der QR-Code enthält den vollständigen Link zum Produkt.</p>
+      <a id="qrProductLink" class="qr-product-link" href="#" target="_blank" rel="noopener"></a>
 
       <div class="qr-actions">
         <button
@@ -260,6 +260,43 @@
     </form>
   </dialog>
 
+
+  <!-- Neues Produkt -->
+  <dialog id="productDialog" class="product-dialog">
+    <button type="button" class="close" data-close aria-label="Schließen">×</button>
+    <form id="productForm">
+      <div>
+        <small>COCOMAC ESSENTIAL</small>
+        <h2>Neues Produkt</h2>
+        <p id="newProductIdPreview" class="meta">Die Artikel-ID wird automatisch erzeugt.</p>
+      </div>
+
+      <label>Foto
+        <input id="productImage" type="file" accept="image/*" class="visually-hidden">
+        <div id="productImageDropzone" class="image-dropzone" tabindex="0">
+          <div id="productImagePreview" class="image-preview"><span>Foto hier ablegen oder auswählen</span></div>
+          <strong>Datei auswählen</strong>
+          <small>Am Handy kannst du Fotomediathek, Dateien oder Kamera wählen.</small>
+        </div>
+      </label>
+
+      <div class="form-columns">
+        <label>Name<input id="productName" required placeholder="z. B. Wasserkocher"></label>
+        <label>Kategorie<input id="productCategory" required placeholder="z. B. Küche" list="categorySuggestions"></label>
+        <datalist id="categorySuggestions"><option value="Küche"><option value="Kamera"><option value="Licht"><option value="Ton"><option value="Büro"><option value="Transport"><option value="Sonstiges"></datalist>
+        <label>Standort<input id="productLocation" required placeholder="z. B. Keller"></label>
+        <label>Menge<input id="productTotal" type="number" min="1" value="1" required></label>
+        <label>Zustand<select id="productCondition"><option>Sehr gut</option><option selected>Gut</option><option>Gebraucht</option><option>Reparatur nötig</option></select></label>
+        <label>Maße<input id="productDimensions" placeholder="optional"></label>
+        <label>Tagespreis in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Wiederbeschaffung in €<input id="productReplacementValue" type="number" min="0" step="0.01" placeholder="optional"></label>
+      </div>
+      <label>Beschreibung<textarea id="productDescription" placeholder="optional"></textarea></label>
+      <label>Notiz<textarea id="productNotes" placeholder="optional"></textarea></label>
+      <button id="saveProductBtn" type="submit">Produkt speichern</button>
+    </form>
+  </dialog>
+
   <!-- QR-Scanner -->
   <dialog id="scanDialog">
     <button
@@ -322,16 +359,8 @@
     id="toast"
     class="toast hidden">
   </div>
-
-  <!-- QR-Scanner-Bibliothek -->
-  <script
-    src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
-  </script>
-
-  <!-- Eigene App -->
-  <script
-    src="./app.js?v=6"
-    type="module">
-  </script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="./app.js?v=8" type="module"></script>
 </body>
 </html>
