@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#161616">
+  <title>Cocomac Essential</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <small>COCOMAC ESSENTIAL</small>
+      <h1>Equipment</h1>
+    </div>
+    <button id="installBtn" class="ghost hidden">Installieren</button>
+  </header>
+
+  <main>
+    <section id="syncBanner" class="banner demo">
+      Testmodus: Daten werden nur auf diesem Gerät gespeichert.
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="toolbar">
+      <input id="search" type="search" placeholder="Artikel, ID oder Kategorie suchen">
+      <button id="scanBtn">QR scannen</button>
+      <button id="settingsBtn" class="ghost">Einstellungen</button>
+    </section>
+
+    <section id="list" class="grid"></section>
+  </main>
+
+  <dialog id="detailDialog">
+    <button class="close" data-close>×</button>
+    <div id="detailContent"></div>
+  </dialog>
+
+  <dialog id="qrDialog">
+    <button class="close" data-close>×</button>
+    <div class="qr-panel">
+      <small>COCOMAC ESSENTIAL</small>
+      <h2 id="qrTitle">QR-Code</h2>
+      <div id="qrImageWrap" class="qr-image-wrap"></div>
+      <strong id="qrArticleId" class="qr-article-id"></strong>
+      <p class="qr-hint">Der QR-Code enthält aktuell die Artikel-ID. Er funktioniert direkt mit dem Scanner in dieser App. Sobald die Domain feststeht, können wir später automatisch Weblinks in die QR-Codes schreiben.</p>
+      <div class="qr-actions">
+        <button type="button" id="downloadQrBtn">QR-Code laden</button>
+        <button type="button" id="printQrBtn" class="ghost">Drucken</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="actionDialog">
+    <button class="close" data-close>×</button>
+    <form id="actionForm">
+      <h2 id="actionTitle">Buchung</h2>
+      <input type="hidden" id="actionArticleId">
+
+      <label>
+        Aktion
+        <select id="actionType">
+          <option value="checkout">Ausleihen</option>
+          <option value="return">Zurückgeben</option>
+          <option value="defect">Defekt melden</option>
+          <option value="release">Defekt freigeben</option>
+        </select>
+      </label>
+
+      <label>
+        Menge
+        <input id="quantity" type="number" min="1" value="1" required>
+      </label>
+
+      <label>Person <input id="person" autocomplete="name"></label>
+      <label>Projekt <input id="project"></label>
+      <label>Rückgabe geplant <input id="dueDate" type="date"></label>
+      <label>Standort <input id="location"></label>
+      <label>Notiz <textarea id="note"></textarea></label>
+
+      <button type="submit">Speichern</button>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog">
+    <button class="close" data-close>×</button>
+
+    <form id="settingsForm">
+      <h2>Verbindung</h2>
+
+      <p>
+        Trage die URL deiner veröffentlichten Google-Apps-Script-Web-App ein.
+        Sie muss mit <b>/exec</b> enden.
+      </p>
+
+      <label>
+        Backend-URL
+        <input
+          id="apiUrl"
+          type="text"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://script.google.com/macros/s/.../exec">
+      </label>
+
+      <label class="inline">
+        <input id="cloudMode" type="checkbox">
+        Cloud-Modus verwenden
+      </label>
+
+      <button type="submit">Speichern und testen</button>
+      <button type="button" id="resetDemo" class="danger">
+        Lokale Testdaten zurücksetzen
+      </button>
+    </form>
+  </dialog>
+
+  <dialog id="scanDialog">
+    <button class="close" data-close>×</button>
+
+    <h2>QR-Code scannen</h2>
+
+    <p>
+      Am zuverlässigsten öffnest du Cocomac-QR-Codes mit der normalen
+      Handy-Kamera. Alternativ kannst du hier eine ID eingeben.
+    </p>
+
+    <form id="manualScanForm">
+      <label>
+        Artikel-ID
+        <input id="manualId" placeholder="CME-KIT-001" required>
+      </label>
+
+      <button type="submit">Artikel öffnen</button>
+    </form>
+
+    <video id="scanVideo" playsinline class="hidden"></video>
+    <button id="cameraScanBtn" class="ghost">Kamera-Scanner starten</button>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="./app.js?v=3" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+COCOMAC ESSENTIAL – QR-FUNKTION
+
+Neu in dieser Version:
+- In jeder Artikelansicht gibt es „QR-Code anzeigen“.
+- QR-Codes können heruntergeladen und einzeln gedruckt werden.
+- Der Scanner liest die Artikel-ID und öffnet den passenden Artikel.
+- Direkte Links mit ?id=ARTIKEL-ID oder ?item=ARTIKEL-ID werden unterstützt.
+
+Wichtig:
+Die QR-Codes enthalten aktuell nur die Artikel-ID, damit sie schon vor der Domain-Festlegung verwendet werden können. Sie funktionieren mit dem Scanner in der App. Sobald die App öffentlich unter einer festen Domain läuft, können die Codes auf direkte Weblinks umgestellt und als vollständige Etikettenserie neu erzeugt werden.
+
+Lokal starten:
+1. Terminal im Ordner frontend öffnen.
+2. python3 -m http.server 8080
+3. http://localhost:8080 öffnen.
