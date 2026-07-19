@@ -293,3 +293,15 @@ textarea { resize: vertical; }
 .calculation-row select{width:100%;min-width:0}
 @media(max-width:900px){.calculation-row{grid-template-columns:1fr 1fr 1fr}.calculation-row .product-cell{grid-column:1/-1}}
 @media(max-width:620px){.calculation-row{grid-template-columns:1fr 1fr}.calculation-row label:last-child{grid-column:1/-1}}
+
+/* Version 5.6: mobile Kalkulation */
+.calculation-total{min-width:0;overflow:hidden}
+.calculation-total span{min-width:0}
+.calculation-total b{min-width:0;max-width:58%;text-align:right;white-space:nowrap;font-size:clamp(1.25rem,6vw,2.1rem);overflow:visible;padding-right:4px}
+#calculationEmailBody{min-height:220px;resize:vertical;line-height:1.45}
+@media(max-width:620px){
+  .calculation-total{gap:12px;align-items:flex-start}
+  .calculation-total span{max-width:45%;line-height:1.15}
+  .calculation-total b{max-width:55%;font-size:clamp(1.2rem,7vw,1.8rem)}
+  #calculationEmailBody{min-height:260px}
+}

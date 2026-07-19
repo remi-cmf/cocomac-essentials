@@ -1,0 +1,11 @@
+COCOMAC ESSENTIALS 5.6
+
+1. Frontend-Dateien vollständig in GitHub ersetzen.
+2. Code.gs im Google Apps Script vollständig ersetzen.
+3. Im Apps-Script-Editor einmal die Funktion authorizeEmailSending ausführen und die E-Mail-/Drive-Berechtigungen bestätigen.
+4. Danach setupCocomacEssentials ausführen.
+5. Web-App als neue Version bereitstellen.
+6. iPhone-App vollständig schließen und neu öffnen; am Mac Cmd+Shift+R.
+
+Hinweis zum Absender:
+Google Apps Script versendet technisch über das Google-Konto, dem das Script gehört. Als Absendername wird "Cocomac Essentials" und als Antwortadresse remy@cocomac-film.com gesetzt. Ein echter Versand direkt über ein GMX-Postfach ist mit MailApp nicht möglich.

@@ -2109,6 +2109,19 @@ function updateCalculationTotal() {
   $('#calculationGrandTotal').textContent = euro(calculationTotals(activeCalculation).total);
 }
 
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function waitForEmailResult(requestId, timeoutMs = 45000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const result = await sendCloudJsonpAction('emailStatus', { requestId }, 10000);
+    if (result.status === 'sent') return result;
+    if (result.status === 'error') throw new Error(result.error || 'E-Mail konnte nicht verschickt werden.');
+    await sleep(1200);
+  }
+  throw new Error('Der E-Mail-Versand dauert zu lange. Bitte später im Postausgang prüfen.');
+}
+
 function projectCalculationHtml(calculation) {
   const p = projects.find(item => item.id === calculation.projectId);
   if (!p) throw new Error('Projekt nicht gefunden.');
@@ -2123,11 +2136,12 @@ function projectCalculationHtml(calculation) {
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="text-align:center;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button><button onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}" style="padding:12px 18px;font:inherit;font-weight:700;background:#fff;border:1px solid #171716">Zurück zur Kalkulation</button></div></body></html>`;
 }
 
 function previewProjectCalculation() {
   const calculation = readCalculationForm();
+  sessionStorage.setItem('cocomacActiveCalculation', JSON.stringify(calculation));
   const popup = window.open('', '_blank');
   if (!popup) return toast('Bitte Pop-ups erlauben.');
   popup.document.open(); popup.document.write(projectCalculationHtml(calculation)); popup.document.close();
@@ -2138,14 +2152,20 @@ async function emailProjectCalculation() {
   if (!calculation.emailTo) return toast('Bitte mindestens einen Empfänger eintragen.');
   if (!settings().cloudMode) return toast('Der E-Mail-Versand ist nur im Cloud-Modus möglich.');
   const button = $('#calculationEmailBtn');
+  const originalLabel = button.textContent;
+  const requestId = `mail_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   button.disabled = true;
+  button.textContent = 'PDF wird erstellt …';
   try {
-    await sendCloudAction({action:'emailProjectCalculation',payload:calculation});
+    await sendCloudAction({action:'emailProjectCalculation',payload:{...calculation,requestId}});
+    button.textContent = 'E-Mail wird verschickt …';
+    await waitForEmailResult(requestId);
     toast('Der Projektbeleg wurde per E-Mail verschickt.');
   } catch (error) {
     toast(error.message || 'E-Mail konnte nicht verschickt werden.');
   } finally {
     button.disabled = false;
+    button.textContent = originalLabel;
   }
 }
 
