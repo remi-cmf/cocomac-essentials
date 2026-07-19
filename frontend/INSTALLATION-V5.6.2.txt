@@ -1,0 +1,13 @@
+COCOMAC ESSENTIALS 5.6.2
+
+E-Mail-Fix:
+- Versand wird als Gmail-Entwurf erstellt und anschließend gesendet.
+- PDF wird zuerst in Drive gespeichert.
+- Jeder Versand wird im Tabellenblatt E-Mail-Protokoll dokumentiert.
+- essential@cocomac-film.com wird als Alias genutzt, falls im Script-Konto freigeschaltet.
+- Andernfalls wird zuverlässig über das Script-Konto gesendet; Reply-To bleibt essential@cocomac-film.com.
+
+Nach dem Einsetzen von Code.gs:
+1. setupCocomacEssentials ausführen.
+2. testEssentialEmail ausführen und Berechtigungen bestätigen.
+3. Neue Web-App-Version bereitstellen.

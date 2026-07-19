@@ -2111,15 +2111,20 @@ function updateCalculationTotal() {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-async function waitForEmailResult(requestId, timeoutMs = 45000) {
+async function waitForEmailResult(requestId, timeoutMs = 90000, onStatus) {
   const started = Date.now();
+  let lastStatus = '';
   while (Date.now() - started < timeoutMs) {
-    const result = await sendCloudJsonpAction('emailStatus', { requestId }, 10000);
+    const result = await sendCloudJsonpAction('emailStatus', { requestId }, 12000);
+    if (result.status && result.status !== lastStatus) {
+      lastStatus = result.status;
+      if (typeof onStatus === 'function') onStatus(result);
+    }
     if (result.status === 'sent') return result;
     if (result.status === 'error') throw new Error(result.error || 'E-Mail konnte nicht verschickt werden.');
     await sleep(1200);
   }
-  throw new Error('Der E-Mail-Versand dauert zu lange. Bitte später im Postausgang prüfen.');
+  throw new Error('Der Versand konnte nicht bestätigt werden. Bitte im Tabellenblatt „E-Mail-Protokoll“ nachsehen.');
 }
 
 function projectCalculationHtml(calculation) {
@@ -2155,13 +2160,18 @@ async function emailProjectCalculation() {
   const originalLabel = button.textContent;
   const requestId = `mail_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   button.disabled = true;
-  button.textContent = 'PDF wird erstellt …';
+  button.textContent = 'Anfrage wird übermittelt …';
   try {
     await sendCloudAction({action:'emailProjectCalculation',payload:{...calculation,requestId}});
-    button.textContent = 'E-Mail wird verschickt …';
-    await waitForEmailResult(requestId);
-    toast('Der Projektbeleg wurde per E-Mail verschickt.');
+    await waitForEmailResult(requestId, 90000, status => {
+      if (status.status === 'creating_pdf') button.textContent = 'PDF wird erstellt …';
+      else if (status.status === 'sending') button.textContent = 'E-Mail wird verschickt …';
+    });
+    button.textContent = 'E-Mail versendet ✓';
+    toast('Der Projektbeleg wurde bestätigt per E-Mail verschickt.');
+    await sleep(1200);
   } catch (error) {
+    console.error('E-Mail-Versand fehlgeschlagen', error);
     toast(error.message || 'E-Mail konnte nicht verschickt werden.');
   } finally {
     button.disabled = false;
