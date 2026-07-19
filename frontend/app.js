@@ -7,6 +7,8 @@ const ADMIN_TOKEN_KEY = 'cocomac-essential-admin-token-v1';
 const LOCAL_PRODUCTS_KEY = 'cocomac-essential-products-v1';
 const LOCAL_PROJECTS_KEY = 'cocomac-essential-projects-v1';
 const LOCAL_RESERVATIONS_KEY = 'cocomac-essential-reservations-v1';
+const LOCAL_CALCULATIONS_KEY = 'cocomac-essential-calculations-v1';
+const LOCAL_INVENTORY_KEY = 'cocomac-essential-inventory-v1';
 const LOCAL_DELETED_PRODUCTS_KEY = 'cocomac-essential-deleted-products-v1';
 const PRODUCT_URL_BASE = 'https://remi-cmf.github.io/cocomac-essentials/';
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwxUcXelc6_DoQNZU6OlgDbbPlTnTqdURV9ebx-hhnfSpRGUxK8L6NROY84QPva2bhI/exec';
@@ -35,6 +37,8 @@ let lastCloudSyncAt = 0;
 let automaticImageSyncAttempted = false;
 let qrCodes = [];
 let productQrScanReturnDialog = null;
+let inventoryCounts = {};
+let calculationDirty = false;
 
 
 const PRODUCT_CATEGORIES = Object.freeze([
@@ -1141,6 +1145,11 @@ function bind() {
     $('#scanDialog').showModal();
   };
   $('#reservationScanBtn').onclick = openReservationScanner;
+  $('#inventoryScanBtn').onclick = openInventoryScanner;
+  $('#inventoryResetBtn').onclick = resetInventory;
+  $('#inventorySaveBtn').onclick = saveInventory;
+  $('#calculationSaveTopBtn').onclick = saveProjectCalculation;
+  $('#calculationSaveBottomBtn').onclick = saveProjectCalculation;
 
   $$('[data-close]').forEach(button => {
     button.onclick = async () => {
@@ -1395,11 +1404,12 @@ async function deleteProject(projectId) {
 function showPage(pageId) {
   $$('.app-page').forEach(page => page.classList.toggle('hidden', page.id !== pageId));
   $$('.menu-nav').forEach(btn => btn.classList.toggle('active', btn.dataset.page === pageId));
-  const titles = {equipmentPage:'Equipment',projectsPage:'Projekte',calendarPage:'Kalender',adminPage:'Administration'};
+  const titles = {equipmentPage:'Equipment',projectsPage:'Projekte',calendarPage:'Kalender',inventoryPage:'Inventur & Scanner',adminPage:'Administration'};
   const title = titles[pageId] || 'Equipment';
   const heading = document.querySelector('.topbar h1');
   if (heading) heading.textContent = title;
   if(pageId==='calendarPage') renderCalendar();
+  if(pageId==='inventoryPage') renderInventory();
 }
 function renderProjects() {
   if(!$('#projectList')) return;
@@ -1529,40 +1539,20 @@ function openReservationScanner() {
 }
 
 async function handleScannedArticle(id) {
-  const normalizedId = String(id || '').trim().toUpperCase();
-  const qrCode = normalizeQrCode(normalizedId);
+  if (scanTarget === 'inventory') {
+    addInventoryScan(id);
+    return;
+  }
+  if (scanTarget === 'reservation') {
+    handleReservationScan(id);
+    return;
+  }
   if (scanTarget === 'productQr') {
-    if (!qrCode) toast('Das ist kein gültiger Cocomac-QR-Code.');
-    else { $('#productQrCode').value = qrCode; toast(`${qrCode} wurde übernommen.`); }
-    scanTarget = 'detail';
-    if (productQrScanReturnDialog) { productQrScanReturnDialog.showModal(); productQrScanReturnDialog = null; }
+    handleProductQrScan(id);
     return;
   }
-  let productId = normalizedId;
-  if (qrCode) {
-    try {
-      const result = await sendCloudJsonpAction('resolveQrCode', { qrCode });
-      if (!result?.productId) throw new Error('Dieser QR-Code ist noch keinem Produkt zugeordnet.');
-      productId = String(result.productId).toUpperCase();
-    } catch (error) {
-      toast(error.message || 'QR-Code konnte nicht aufgelöst werden.');
-      if (scanTarget === 'reservation' && reservationScanSnapshot) restoreReservationAfterScan('');
-      return;
-    }
-  }
-  const product = catalog.find(item => String(item.id).toUpperCase() === productId);
-  if (!product) {
-    toast(`Kein Produkt mit der Artikelnummer ${productId} gefunden.`);
-    if (scanTarget === 'reservation' && reservationScanSnapshot) restoreReservationAfterScan('');
-    return;
-  }
-  if (scanTarget === 'reservation' && reservationScanSnapshot) {
-    restoreReservationAfterScan(product.id);
-    toast(`${product.name} wurde ausgewählt.`);
-  } else openDetail(product.id);
-  scanTarget = 'detail';
+  openScannedProduct(id);
 }
-
 function restoreReservationAfterScan(productId) {
   const snapshot = reservationScanSnapshot;
   reservationScanSnapshot = null;
@@ -1934,6 +1924,94 @@ async function deleteProduct(productId, options = {}) {
   }
 }
 
+function openInventoryScanner() {
+  scanTarget = 'inventory';
+  $('#manualScanForm label').firstChild.textContent = 'Artikel-ID oder QR-Code manuell eingeben';
+  $('#manualId').placeholder = 'CME-KIT-001 oder CMEQR-00000001';
+  $('#scanDialog h2').textContent = 'Inventur scannen';
+  $('#scanDialog').showModal();
+  setScannerStatus('Scanne einen Artikel für die laufende Inventur.');
+}
+
+async function resolveScannedProductId(value) {
+  const qrCode = normalizeQrCode(value);
+  if (!qrCode) return String(value || '').toUpperCase();
+  if (!settings().cloudMode) return '';
+  const result = await sendCloudJsonpAction('resolveQrCode', { qrCode });
+  return String(result?.productId || '').toUpperCase();
+}
+
+async function addInventoryScan(value) {
+  try {
+    const productId = await resolveScannedProductId(value);
+    const product = catalog.find(item => item.id === productId);
+    if (!product) return toast('Dieser Artikel wurde nicht gefunden.');
+    inventoryCounts[productId] = Math.min(Number(product.total || 0) + 999, Number(inventoryCounts[productId] || 0) + 1);
+    persistInventoryDraft();
+    renderInventory();
+    toast(`${product.name}: ${inventoryCounts[productId]} gezählt.`);
+  } catch (error) { toast(error.message || 'QR-Code konnte nicht aufgelöst werden.'); }
+}
+
+function persistInventoryDraft() {
+  localStorage.setItem(LOCAL_INVENTORY_KEY, JSON.stringify({ date: $('#inventoryDate')?.value || todayIso(), name: $('#inventoryName')?.value || '', counts: inventoryCounts }));
+}
+
+function loadInventoryDraft() {
+  const draft = readJson(LOCAL_INVENTORY_KEY, {});
+  inventoryCounts = draft.counts && typeof draft.counts === 'object' ? draft.counts : {};
+  if ($('#inventoryDate')) $('#inventoryDate').value = draft.date || todayIso();
+  if ($('#inventoryName')) $('#inventoryName').value = draft.name || `Inventur ${formatDate(todayIso())}`;
+}
+
+function resetInventory() {
+  if (Object.keys(inventoryCounts).length && !confirm('Laufende Inventur wirklich zurücksetzen?')) return;
+  inventoryCounts = {};
+  localStorage.removeItem(LOCAL_INVENTORY_KEY);
+  loadInventoryDraft();
+  renderInventory();
+}
+
+function renderInventory() {
+  if (!$('#inventoryList')) return;
+  if (!$('#inventoryDate').value) loadInventoryDraft();
+  const rows = catalog.slice().sort((a,b)=>a.category.localeCompare(b.category,'de') || a.name.localeCompare(b.name,'de'));
+  const expected = rows.reduce((sum,item)=>sum+Number(item.total||0),0);
+  const counted = rows.reduce((sum,item)=>sum+Number(inventoryCounts[item.id]||0),0);
+  const complete = rows.filter(item=>Number(inventoryCounts[item.id]||0)===Number(item.total||0)).length;
+  $('#inventorySummary').innerHTML = [['Soll',expected],['Gezählt',counted],['Vollständig',`${complete}/${rows.length}`]].map(([l,v])=>`<div class="stat"><strong>${v}</strong><span>${l}</span></div>`).join('');
+  $('#inventoryList').innerHTML = rows.map(item=>{
+    const count=Number(inventoryCounts[item.id]||0), diff=count-Number(item.total||0);
+    return `<div class="inventory-row ${diff===0&&count>0?'inventory-ok':diff!==0&&count>0?'inventory-difference':''}">
+      <img src="${escapeHtml(item.image || item.imageUrl || '')}" alt="" onerror="this.style.visibility='hidden'">
+      <div class="inventory-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · ${escapeHtml(item.category)} · Soll ${item.total}</small></div>
+      <div class="inventory-count-control"><button type="button" class="ghost" data-inventory-minus="${escapeHtml(item.id)}">−</button><input type="number" min="0" inputmode="numeric" data-inventory-count="${escapeHtml(item.id)}" value="${count}"><button type="button" data-inventory-plus="${escapeHtml(item.id)}">+</button></div>
+      <div class="inventory-diff ${diff===0?'ok':diff<0?'missing':'extra'}">${diff===0?'✓':diff>0?'+'+diff:String(diff)}</div>
+    </div>`;
+  }).join('') || '<div class="empty-state">Keine Produkte vorhanden.</div>';
+  $$('[data-inventory-count]').forEach(input=>input.onchange=()=>{inventoryCounts[input.dataset.inventoryCount]=Math.max(0,Math.round(Number(input.value||0)));persistInventoryDraft();renderInventory();});
+  $$('[data-inventory-minus]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.inventoryMinus;inventoryCounts[id]=Math.max(0,Number(inventoryCounts[id]||0)-1);persistInventoryDraft();renderInventory();});
+  $$('[data-inventory-plus]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.inventoryPlus;inventoryCounts[id]=Number(inventoryCounts[id]||0)+1;persistInventoryDraft();renderInventory();});
+  $('#inventoryDate').onchange = persistInventoryDraft;
+  $('#inventoryName').oninput = persistInventoryDraft;
+}
+
+async function saveInventory() {
+  const payload = {
+    id: `INV-${Date.now()}`,
+    date: $('#inventoryDate').value || todayIso(),
+    name: $('#inventoryName').value.trim() || `Inventur ${formatDate(todayIso())}`,
+    items: catalog.map(item=>({productId:item.id, expected:Number(item.total||0), counted:Number(inventoryCounts[item.id]||0)}))
+  };
+  const button=$('#inventorySaveBtn'); button.disabled=true; button.textContent='Wird gespeichert …';
+  try {
+    if (settings().cloudMode) await sendCloudJsonpAction('saveInventory', payload, 30000);
+    localStorage.setItem('cocomac-last-inventory', JSON.stringify(payload));
+    toast('Inventur wurde gespeichert.');
+  } catch(error) { toast('Inventur konnte nicht gespeichert werden: '+error.message); }
+  finally { button.disabled=false; button.textContent='Inventur speichern'; }
+}
+
 function renderCalendar() {
   if(!$('#calendarFrom')) return;
   if(!$('#calendarFrom').value) $('#calendarFrom').value=todayIso();
@@ -1994,23 +2072,34 @@ function buildDefaultCalculation(projectId) {
   };
 }
 
-function openProjectCalculation(projectId) {
+async function openProjectCalculation(projectId) {
   const project = projects.find(item => item.id === projectId);
   if (!project) return toast('Projekt nicht gefunden.');
   activeCalculation = buildDefaultCalculation(projectId);
+  const localSaved = readJson(LOCAL_CALCULATIONS_KEY, {})[projectId];
+  if (localSaved) activeCalculation = mergeSavedCalculation(activeCalculation, localSaved);
+  if (settings().cloudMode) {
+    try {
+      const response = await sendCloudJsonpAction('getProjectCalculation', {projectId});
+      if (response?.calculation) activeCalculation = mergeSavedCalculation(activeCalculation, response.calculation);
+    } catch (error) { console.warn('Gespeicherte Kalkulation konnte nicht geladen werden:', error); }
+  }
+  calculationDirty = false;
   $('#calculationProjectId').value = projectId;
   $('#calculationProjectMeta').innerHTML = `<div><b>Projekt</b><br>${escapeHtml(project.name)}</div><div><b>Nummer</b><br>${escapeHtml(project.number || project.id)}</div><div><b>Zeitraum</b><br>${formatDate(project.start)} – ${formatDate(project.end)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(project.contact || '–')}</div>`;
-  $('#calculationDiscount').value = '0';
-  $('#calculationExtraCost').value = '0';
-  $('#calculationExtraLabel').value = '';
-  $('#calculationTaxMode').value = 'net';
-  $('#calculationNote').value = '';
+  $('#calculationDiscount').value = String(activeCalculation.discount || 0);
+  $('#calculationExtraCost').value = String(activeCalculation.extraCost || 0);
+  $('#calculationExtraLabel').value = activeCalculation.extraLabel || '';
+  $('#calculationTaxMode').value = activeCalculation.taxMode || 'net';
+  $('#calculationNote').value = activeCalculation.note || '';
   $('#calculationEmailTo').value = activeCalculation.emailTo;
-  $('#calculationEmailCc').value = '';
+  $('#calculationEmailCc').value = activeCalculation.emailCc || '';
   $('#calculationEmailSubject').value = activeCalculation.emailSubject;
   $('#calculationEmailBody').value = activeCalculation.emailBody;
   renderCalculationRows();
+  setCalculationSaveStatus('');
   $('#projectCalculationDialog').showModal();
+  $('#projectCalculationForm').oninput = () => { calculationDirty=true; setCalculationSaveStatus('Ungespeicherte Änderungen'); };
 }
 
 function renderCalculationRows() {
@@ -2047,11 +2136,43 @@ function renderCalculationRows() {
         } else {
           activeCalculation.lines[index][field] = Number(input.value || 0);
         }
+        calculationDirty = true;
+        setCalculationSaveStatus('Ungespeicherte Änderungen');
         updateCalculationTotal();
       };
     });
   });
   updateCalculationTotal();
+}
+
+function mergeSavedCalculation(base, saved) {
+  const savedLines = new Map((saved.lines || []).map(line => [line.reservationId || line.productId, line]));
+  return {
+    ...base, ...saved,
+    lines: base.lines.map(line => ({...line, ...(savedLines.get(line.reservationId) || savedLines.get(line.productId) || {})})),
+    projectId: base.projectId
+  };
+}
+
+function setCalculationSaveStatus(text) {
+  ['#calculationSaveStatusTop','#calculationSaveStatusBottom'].forEach(selector=>{const el=$(selector);if(el)el.textContent=text;});
+}
+
+async function saveProjectCalculation() {
+  if (!activeCalculation) return;
+  const calculation = readCalculationForm();
+  const store = readJson(LOCAL_CALCULATIONS_KEY, {});
+  store[calculation.projectId] = calculation;
+  localStorage.setItem(LOCAL_CALCULATIONS_KEY, JSON.stringify(store));
+  const buttons=[$('#calculationSaveTopBtn'),$('#calculationSaveBottomBtn')].filter(Boolean);
+  buttons.forEach(button=>{button.disabled=true;button.textContent='Wird gespeichert …';});
+  try {
+    if (settings().cloudMode) await sendCloudJsonpAction('saveProjectCalculation', calculation, 30000);
+    calculationDirty=false;
+    setCalculationSaveStatus(`Gespeichert um ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`);
+    toast('Projektkalkulation wurde zwischengespeichert.');
+  } catch(error) { setCalculationSaveStatus('Speichern fehlgeschlagen'); toast('Kalkulation konnte nicht gespeichert werden: '+error.message); }
+  finally { buttons.forEach(button=>{button.disabled=false;button.textContent='Zwischenstand speichern';}); }
 }
 
 function readCalculationForm() {

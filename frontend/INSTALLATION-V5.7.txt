@@ -1,0 +1,15 @@
+COCOMAC ESSENTIALS 5.7
+
+NEU:
+- PDF-Erzeugung direkt aus HTML, ohne DocumentApp
+- E-Mail-Versand mit PDF-Anhang über Gmail/Google Workspace
+- sichtbare Versionsanzeige 5.7.0
+
+INSTALLATION:
+1. Code.gs vollständig ersetzen.
+2. setupCocomacEssentials ausführen.
+3. authorizeEmailSending ausführen und Berechtigungen bestätigen.
+4. testEssentialEmail ausführen.
+5. Web-App als neue Version bereitstellen.
+6. Frontend vollständig auf GitHub ersetzen.
+7. Prüfen, dass unten rechts Version 5.7.0 steht.

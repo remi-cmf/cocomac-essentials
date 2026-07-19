@@ -1,0 +1,16 @@
+COCOMAC ESSENTIALS 5.8
+
+NEU:
+- eigener Bereich „Inventur & Scanner“ mit QR-Scan, Soll/Ist-Abgleich und Speicherung
+- Projektkalkulation kann oben und unten zwischengespeichert werden
+- gespeicherte Kalkulationen werden beim erneuten Öffnen wieder geladen
+- kompakter Zeitraum im Kalender
+- einheitliche Bildgrößen in der Administration
+
+INSTALLATION:
+1. Inhalt des Ordners frontend vollständig in das GitHub-Repository kopieren.
+2. Vorhandene Dateien ersetzen.
+3. Commit durchführen und GitHub Pages neu laden.
+4. Auf dem iPhone die Seite einmal vollständig schließen und neu öffnen.
+5. Unten rechts muss Version 5.8.0 erscheinen.
+6. Danach den neuen Code.gs aus dem separaten Google-Apps-Script-Paket einsetzen und die Web-App erneut bereitstellen.

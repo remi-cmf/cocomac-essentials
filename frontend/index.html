@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=563">
+  <link rel="stylesheet" href="./styles.css?v=580">
 </head>
 
 <body>
@@ -30,6 +30,7 @@
         <button type="button" class="menu-nav active" data-page="equipmentPage">Equipment</button>
         <button type="button" class="menu-nav" data-page="projectsPage">Projekte</button>
         <button type="button" class="menu-nav" data-page="calendarPage">Kalender</button>
+        <button type="button" class="menu-nav" data-page="inventoryPage">Inventur & Scanner</button>
         <button type="button" class="menu-nav" data-page="adminPage">Administration</button>
         <hr>
         <button type="button" id="menuSettingsBtn">Verbindung</button>
@@ -83,6 +84,22 @@
       <div id="availabilityList" class="availability-list"></div>
       <h3 class="section-title">Buchungen im Zeitraum</h3>
       <div id="calendarBookings" class="timeline"></div>
+    </section>
+
+    <section id="inventoryPage" class="app-page hidden">
+      <div class="page-heading inventory-heading">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Inventur & Scanner</h2></div>
+        <button id="inventoryScanBtn" type="button">QR-Code scannen</button>
+      </div>
+      <div class="inventory-toolbar">
+        <label>Inventurdatum<input id="inventoryDate" type="date"></label>
+        <label>Bezeichnung<input id="inventoryName" type="text" placeholder="z. B. Sommerinventur 2026"></label>
+        <button id="inventoryResetBtn" type="button" class="ghost">Neu beginnen</button>
+        <button id="inventorySaveBtn" type="button">Inventur speichern</button>
+      </div>
+      <div id="inventorySummary" class="stats"></div>
+      <div class="inventory-help">Scanne jeden vorhandenen Artikel. Bei Produkten mit mehreren Exemplaren erhöht jeder Scan die gezählte Menge um eins. Mengen können anschließend manuell korrigiert werden.</div>
+      <div id="inventoryList" class="inventory-list"></div>
     </section>
 
     <section id="adminPage" class="app-page hidden">
@@ -486,6 +503,7 @@
       <small>COCOMAC ESSENTIAL</small>
       <h2>Projektkalkulation</h2>
       <p class="dialog-intro">Passe Preise und Sonderkonditionen nur für dieses Projekt an. Die Stammpreise des Equipments bleiben unverändert.</p>
+      <div class="calculation-save-bar calculation-save-bar-top"><button id="calculationSaveTopBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusTop" class="meta"></span></div>
       <div id="calculationProjectMeta" class="project-meta-grid"></div>
       <div id="calculationRows" class="calculation-rows"></div>
       <div class="form-columns">
@@ -505,6 +523,7 @@
       </div>
       <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
       <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
+      <div class="calculation-save-bar"><button id="calculationSaveBottomBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusBottom" class="meta"></span></div>
       <div class="project-actions">
         <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
         <button id="calculationEmailBtn" type="button" class="ghost">PDF per E-Mail senden</button>
@@ -512,7 +531,7 @@
     </form>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.6.3</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.8.0</div>
 
   <div
     id="toast"
@@ -521,6 +540,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=563" type="module"></script>
+  <script src="./app.js?v=580" type="module"></script>
 </body>
 </html>
