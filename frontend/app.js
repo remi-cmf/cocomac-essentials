@@ -1069,6 +1069,7 @@ async function openAdministration() {
   closeMainMenu();
   if (!(await ensureAdminAccess())) return;
   showPage('adminPage');
+  showAdminOverview();
   renderAdminProjects();
   renderAdminProducts();
   loadInventoryDraft();
@@ -1088,6 +1089,7 @@ async function submitAdminLogin(event) {
     setAdminToken(response.adminToken || '');
     $('#adminLoginDialog').close();
     showPage('adminPage');
+    showAdminOverview();
     renderAdminProjects();
     renderAdminProducts();
     loadInventoryDraft();
@@ -1099,13 +1101,37 @@ async function submitAdminLogin(event) {
   } finally { button.disabled = false; button.textContent = 'Anmelden'; }
 }
 
+function showAdminOverview() {
+  $$('.admin-module-panel').forEach(panel => panel.classList.add('hidden'));
+  $('.admin-module-grid')?.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function openAdminModule(moduleId) {
+  $$('.admin-module-panel').forEach(panel => panel.classList.toggle('hidden', panel.id !== moduleId));
+  $('.admin-module-grid')?.classList.add('hidden');
+  if (moduleId === 'inventoryModule') { loadInventoryDraft(); renderInventory(); }
+  if (moduleId === 'productsModule') renderAdminProducts();
+  document.getElementById(moduleId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function saveInventoryDraftManually() {
+  persistInventoryDraft();
+  const status = $('#inventoryDraftStatus');
+  if (status) status.textContent = `Zwischenstand gesichert · ${new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})} Uhr`;
+  toast('Inventur-Zwischenstand wurde auf diesem Gerät gesichert.');
+}
+
 function bind() {
   $('#search').oninput = render;
   $$('.menu-nav').forEach(button => button.onclick = () => { if (button.dataset.page === 'adminPage') openAdministration(); else { showPage(button.dataset.page); closeMainMenu(); } });
   $('#menuBtn').onclick = toggleMainMenu;
   $('#menuSettingsBtn').onclick = () => { closeMainMenu(); openSettingsDialog(); };
   $('#adminLoginForm').onsubmit = submitAdminLogin;
-  $('#adminLogoutBtn').onclick = () => { setAdminToken(''); showPage('equipmentPage'); toast('Administration wurde gesperrt.'); };
+  $('#adminLogoutBtn').onclick = () => { setAdminToken(''); showAdminOverview(); showPage('equipmentPage'); toast('Administration wurde gesperrt.'); };
+  $$('[data-admin-module]').forEach(button => button.onclick = () => openAdminModule(button.dataset.adminModule));
+  $$('[data-admin-module-back]').forEach(button => button.onclick = showAdminOverview);
+  if ($('#adminProductSearch')) $('#adminProductSearch').oninput = renderAdminProducts;
   document.addEventListener('click', event => {
     if (!event.target.closest('.topbar-actions')) closeMainMenu();
   });
@@ -1163,6 +1189,7 @@ function bind() {
   $('#reservationScanBtn').onclick = openReservationScanner;
   $('#inventoryScanBtn').onclick = openInventoryScanner;
   $('#inventoryResetBtn').onclick = resetInventory;
+  $('#inventoryDraftBtn').onclick = saveInventoryDraftManually;
   $('#inventorySaveBtn').onclick = saveInventory;
   $('#calculationSaveTopBtn').onclick = saveProjectCalculation;
   $('#calculationSaveBottomBtn').onclick = saveProjectCalculation;
@@ -1902,7 +1929,8 @@ function renderAdminProjects() {
 function renderAdminProducts() {
   const wrap = $('#adminProductList');
   if (!wrap) return;
-  const sorted = catalog.slice().sort((a,b) => a.name.localeCompare(b.name, 'de'));
+  const search = String($('#adminProductSearch')?.value || '').trim().toLowerCase();
+  const sorted = catalog.filter(item => !search || [item.name,item.id,item.category].some(value => String(value || '').toLowerCase().includes(search))).sort((a,b) => a.name.localeCompare(b.name, 'de'));
   wrap.innerHTML = sorted.length ? sorted.map(item => {
     const image = productImageSource(item);
     return `<div class="admin-product-row">
@@ -1978,6 +2006,7 @@ function loadInventoryDraft() {
   inventoryCounts = draft.counts && typeof draft.counts === 'object' ? draft.counts : {};
   if ($('#inventoryDate')) $('#inventoryDate').value = draft.date || todayIso();
   if ($('#inventoryName')) $('#inventoryName').value = draft.name || `Inventur ${formatDate(todayIso())}`;
+  if ($('#inventoryDraftStatus')) $('#inventoryDraftStatus').textContent = Object.keys(inventoryCounts).length ? 'Gesicherter Zwischenstand wurde wiederhergestellt.' : '';
 }
 
 function resetInventory() {
@@ -2279,7 +2308,7 @@ function projectCalculationHtml(calculation) {
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button><button onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}" style="padding:12px 18px;font:inherit;font-weight:700;background:#fff;border:1px solid #171716">Zurück zur Kalkulation</button></div></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}.pdf-actions{position:sticky;bottom:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:40px auto 0;padding:12px;width:fit-content;max-width:100%;background:rgba(255,255,255,.94);border:1px solid #ddd8cc;border-radius:22px;box-shadow:0 12px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.pdf-actions button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer}.pdf-primary{background:#171716;color:#fff;border:1px solid #171716}.pdf-secondary{background:#fff;color:#171716;border:1px solid #d8d4ca}@media(max-width:600px){body{padding:18px}.pdf-actions{width:100%;display:grid}.pdf-actions button{width:100%}}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print pdf-actions"><button class="pdf-primary" onclick="window.print()"><span>↓</span>Drucken / PDF sichern</button><button class="pdf-secondary" onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}"><span>←</span>Zurück zur Kalkulation</button></div></body></html>`;
 }
 
 function previewProjectCalculation() {

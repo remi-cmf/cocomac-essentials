@@ -1,0 +1,7 @@
+Version 5.8.2
+
+- Administration startet mit einer kompakten Modulübersicht statt mehreren langen Listen.
+- Inventur, Projekte, QR-Datenbank und Produktverwaltung öffnen sich einzeln.
+- Produktverwaltung besitzt eine Suche nach Name, Artikelnummer und Kategorie.
+- Inventur-Zwischenstände können sichtbar auf dem Gerät gesichert und später fortgesetzt werden.
+- Die Schaltflächen in der Beleg-/PDF-Vorschau wurden neu gestaltet und mobil optimiert.

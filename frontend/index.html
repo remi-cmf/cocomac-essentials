@@ -91,27 +91,41 @@
         <div class="admin-heading-actions"><button id="adminLogoutBtn" type="button" class="ghost">Abmelden</button><button id="syncDriveImagesBtn" type="button" class="ghost">Bilder aus Drive zuordnen</button><button id="adminAddProductBtn" type="button">+ Neues Produkt</button></div>
       </div>
       <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
-      <section id="inventoryPage" class="admin-section admin-inventory-section">
-            <div class="section-heading-inline inventory-heading">
-              <div><h3>Inventur & Scanner</h3><p class="field-help">Geschützter Inventurbereich. Scans und Bestandszählungen sind nur nach der Administration-Anmeldung möglich.</p></div>
-              <button id="inventoryScanBtn" type="button">QR-Code scannen</button>
-            </div>
-            <div class="inventory-toolbar">
-              <label>Inventurdatum<input id="inventoryDate" type="date"></label>
-              <label>Bezeichnung<input id="inventoryName" type="text" placeholder="z. B. Sommerinventur 2026"></label>
-              <button id="inventoryResetBtn" type="button" class="ghost">Neu beginnen</button>
-              <button id="inventorySaveBtn" type="button">Inventur speichern</button>
-            </div>
-            <div id="inventorySummary" class="stats"></div>
-            <div class="inventory-help">Scanne jeden vorhandenen Artikel. Bei Produkten mit mehreren Exemplaren erhöht jeder Scan die gezählte Menge um eins. Mengen können anschließend manuell korrigiert werden.</div>
-            <div id="inventoryList" class="inventory-list"></div>
-          </section>
-      <section class="admin-section">
+      <div class="admin-module-grid" aria-label="Administrationsbereiche">
+        <button type="button" class="admin-module-button" data-admin-module="inventoryModule"><span class="admin-module-icon">⌁</span><span><b>Inventur & Scanner</b><small>Bestände zählen und QR-Codes scannen</small></span><span class="admin-module-arrow">›</span></button>
+        <button type="button" class="admin-module-button" data-admin-module="projectsModule"><span class="admin-module-icon">CME</span><span><b>Projekte verwalten</b><small>Projekte bearbeiten oder löschen</small></span><span class="admin-module-arrow">›</span></button>
+        <button type="button" class="admin-module-button" data-admin-module="qrModule"><span class="admin-module-icon">QR</span><span><b>QR-Code-Datenbank</b><small>Etiketten erzeugen und verwalten</small></span><span class="admin-module-arrow">›</span></button>
+        <button type="button" class="admin-module-button" data-admin-module="productsModule"><span class="admin-module-icon">+</span><span><b>Produkte verwalten</b><small>Produkte suchen und bearbeiten</small></span><span class="admin-module-arrow">›</span></button>
+      </div>
+
+      <section id="inventoryModule" class="admin-section admin-module-panel hidden">
+        <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
+        <div id="inventoryPage" class="admin-inventory-section">
+          <div class="section-heading-inline inventory-heading">
+            <div><h3>Inventur & Scanner</h3><p class="field-help">Geschützter Inventurbereich. Scans und Bestandszählungen sind nur nach der Administration-Anmeldung möglich.</p></div>
+            <button id="inventoryScanBtn" type="button">QR-Code scannen</button>
+          </div>
+          <div class="inventory-toolbar">
+            <label>Inventurdatum<input id="inventoryDate" type="date"></label>
+            <label>Bezeichnung<input id="inventoryName" type="text" placeholder="z. B. Sommerinventur 2026"></label>
+            <button id="inventoryResetBtn" type="button" class="ghost">Neu beginnen</button>
+            <button id="inventoryDraftBtn" type="button" class="ghost">Zwischenstand sichern</button>
+            <button id="inventorySaveBtn" type="button">Inventur abschließen</button>
+          </div>
+          <div id="inventoryDraftStatus" class="inventory-draft-status" aria-live="polite"></div>
+          <div id="inventorySummary" class="stats"></div>
+          <div class="inventory-help">Scanne jeden vorhandenen Artikel. Bei Produkten mit mehreren Exemplaren erhöht jeder Scan die gezählte Menge um eins. Mengen können anschließend manuell korrigiert werden.</div>
+          <div id="inventoryList" class="inventory-list"></div>
+        </div>
+      </section>
+      <section id="projectsModule" class="admin-section admin-module-panel hidden">
+        <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
         <h3>Projekte verwalten</h3>
         <p class="field-help">Projekte können ausschließlich hier gelöscht werden.</p>
         <div id="adminProjectList" class="admin-product-list"></div>
       </section>
-      <section class="admin-section">
+      <section id="qrModule" class="admin-section admin-module-panel hidden">
+        <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
         <div class="section-heading-inline"><div><h3>QR-Code-Datenbank</h3><p class="field-help">Erzeuge fortlaufend beliebig viele permanente Etiketten. Ein Code wird erst beim Produkt angelegt oder bearbeitet zugeordnet.</p></div></div>
         <div class="qr-database-controls">
           <label>Anzahl neuer QR-Codes<input id="qrBatchCount" type="number" min="1" max="1000" step="1" value="100"></label>
@@ -121,8 +135,10 @@
         <div id="qrDatabaseSummary" class="admin-intro">QR-Code-Datenbank wird geladen …</div>
         <div id="qrCodeList" class="admin-product-list"></div>
       </section>
-      <section class="admin-section">
-        <h3>Produkte verwalten</h3>
+      <section id="productsModule" class="admin-section admin-module-panel hidden">
+        <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
+        <div class="section-heading-inline"><div><h3>Produkte verwalten</h3><p class="field-help">Suche gezielt nach einem Produkt, statt durch die gesamte Liste zu scrollen.</p></div></div>
+        <label class="admin-product-search">Produkt suchen<input id="adminProductSearch" type="search" placeholder="Name, Artikelnummer oder Kategorie"></label>
         <div id="adminProductList" class="admin-product-list"></div>
       </section>
     </section>
@@ -529,7 +545,7 @@
     </form>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.8.1</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.8.2</div>
 
   <div
     id="toast"
@@ -538,6 +554,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=581" type="module"></script>
+  <script src="./app.js?v=582" type="module"></script>
 </body>
 </html>
