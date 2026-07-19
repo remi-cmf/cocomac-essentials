@@ -1974,6 +1974,7 @@ function buildDefaultCalculation(projectId) {
       to: reservation.to,
       days,
       unitPrice: Number(product?.dailyPrice || 0),
+      billingType: 'fixed',
       discount: 0,
       free: false
     };
@@ -2018,7 +2019,13 @@ function renderCalculationRows() {
     <div class="calculation-row" data-calculation-index="${index}">
       <div class="product-cell"><b>${escapeHtml(line.name)}</b><br><small>${escapeHtml(line.productId)} · Bestand ${line.stock}<br>${formatDate(line.from)}–${formatDate(line.to)} · ${line.days} Tag${line.days===1?'':'e'}</small></div>
       <label>Menge<input data-calc-field="quantity" type="number" min="0" step="1" value="${line.quantity}"></label>
-      <label>Mietpreis / Stück<input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
+      <label>Abrechnung<select data-calc-field="billingType">
+        <option value="fixed" ${line.billingType==='fixed'?'selected':''}>Fixpreis</option>
+        <option value="daily" ${line.billingType==='daily'?'selected':''}>Tagespreis</option>
+        <option value="weekly" ${line.billingType==='weekly'?'selected':''}>Wochenpreis</option>
+        <option value="monthly" ${line.billingType==='monthly'?'selected':''}>Monatspreis</option>
+      </select></label>
+      <label><span data-price-label>${billingPriceLabel(line.billingType)}</span><input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
       <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="1" inputmode="numeric" value="${Math.round(Number(line.discount || 0))}"></label>
       <label class="checkbox-line"><input data-calc-field="free" type="checkbox" ${line.free?'checked':''}> Kostenlos</label>
     </div>`).join('') : '<div class="empty-state">Noch kein Equipment im Projekt.</div>';
@@ -2029,6 +2036,10 @@ function renderCalculationRows() {
         const field = input.dataset.calcField;
         if (field === 'free') {
           activeCalculation.lines[index][field] = input.checked;
+        } else if (field === 'billingType') {
+          activeCalculation.lines[index][field] = input.value;
+          const priceLabel = row.querySelector('[data-price-label]');
+          if (priceLabel) priceLabel.textContent = billingPriceLabel(input.value);
         } else if (field === 'discount') {
           const rounded = Math.min(100, Math.max(0, Math.round(Number(input.value || 0))));
           input.value = String(rounded);
@@ -2063,9 +2074,27 @@ function readCalculationForm() {
   return activeCalculation;
 }
 
+function billingPriceLabel(type) {
+  return ({fixed:'Fixpreis / Stück',daily:'Tagespreis / Stück',weekly:'Wochenpreis / Stück',monthly:'Monatspreis / Stück'})[type] || 'Fixpreis / Stück';
+}
+
+function billingTypeLabel(type) {
+  return ({fixed:'Fixpreis',daily:'Tagespreis',weekly:'Wochenpreis',monthly:'Monatspreis'})[type] || 'Fixpreis';
+}
+
+function billingUnits(line) {
+  const days = Math.max(1, Number(line.days || 1));
+  switch (line.billingType) {
+    case 'daily': return days;
+    case 'weekly': return Math.ceil(days / 7);
+    case 'monthly': return Math.ceil(days / 30);
+    default: return 1;
+  }
+}
+
 function calculationTotals(calculation) {
   let subtotal = calculation.lines.reduce((sum,line)=>{
-    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.unitPrice||0);
+    const base = line.free ? 0 : Number(line.quantity||0) * Number(line.unitPrice||0) * billingUnits(line);
     return sum + base * (1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
   },0);
   subtotal *= 1-Math.min(100,Math.max(0,Number(calculation.discount||0)))/100;
@@ -2085,14 +2114,16 @@ function projectCalculationHtml(calculation) {
   if (!p) throw new Error('Projekt nicht gefunden.');
   const totals = calculationTotals(calculation);
   const rows = calculation.lines.map(line=>{
-    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.unitPrice||0);
+    const units = billingUnits(line);
+    const base = line.free ? 0 : Number(line.quantity||0) * Number(line.unitPrice||0) * units;
     const lineTotal = base*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
-    return `<tr><td>${escapeHtml(line.productId)}</td><td><b>${escapeHtml(line.name)}</b><br><small>Gesamtbestand: ${line.stock}</small></td><td>${line.quantity}</td><td>${formatDate(line.from)} – ${formatDate(line.to)}<br><small>${line.days} Tag${line.days===1?'':'e'}</small></td><td>${line.free?'kostenlos':euro(line.unitPrice)}</td><td>${line.discount?line.discount+' %':'–'}</td><td>${euro(lineTotal)}</td></tr>`;
+    const billingText = line.free ? 'kostenlos' : `${euro(line.unitPrice)} · ${billingTypeLabel(line.billingType)}${units > 1 ? ` × ${units}` : ''}`;
+    return `<tr><td>${escapeHtml(line.productId)}</td><td><b>${escapeHtml(line.name)}</b><br><small>Gesamtbestand: ${line.stock}</small></td><td>${line.quantity}</td><td>${formatDate(line.from)} – ${formatDate(line.to)}<br><small>${line.days} Tag${line.days===1?'':'e'}</small></td><td>${billingText}</td><td>${line.discount?line.discount+' %':'–'}</td><td>${euro(lineTotal)}</td></tr>`;
   }).join('');
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Mietpreis / Stück</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="text-align:center;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="text-align:center;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 
 function previewProjectCalculation() {

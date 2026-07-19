@@ -1,0 +1,5 @@
+COCOMAC ESSENTIALS – VERSION 5.5.2
+
+Neu: Abrechnungsart pro Projektposition: Fixpreis, Tagespreis, Wochenpreis oder Monatspreis.
+Berechnung: Tag = Kalendertage inkl. Start/Ende; Woche = angefangene 7 Tage; Monat = angefangene 30 Tage.
+Frontend vollständig bei GitHub ersetzen und hart neu laden.

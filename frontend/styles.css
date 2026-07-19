@@ -189,7 +189,7 @@ textarea { resize: vertical; }
 /* Version 5.2: Projektkalkulation */
 .calculation-dialog{width:min(1080px,calc(100vw - 24px));max-width:1080px}
 .calculation-rows{display:grid;gap:12px;margin:20px 0}
-.calculation-row{display:grid;grid-template-columns:minmax(220px,2fr) repeat(4,minmax(100px,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line,#ddd);border-radius:16px;background:#fff}
+.calculation-row{display:grid;grid-template-columns:minmax(220px,2fr) repeat(5,minmax(105px,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line,#ddd);border-radius:16px;background:#fff}
 .calculation-row .product-cell{align-self:center}
 .calculation-row label{min-width:0}
 .calculation-row input{width:100%;min-width:0}
@@ -287,3 +287,9 @@ textarea { resize: vertical; }
   .quantity-stepper-button{width:64px!important;min-height:58px!important;border-radius:18px!important;font-size:2rem!important}
   .quantity-stepper input{min-height:58px!important;font-size:1.25rem!important}
 }
+
+
+/* Version 5.5.2: flexible Abrechnungsarten */
+.calculation-row select{width:100%;min-width:0}
+@media(max-width:900px){.calculation-row{grid-template-columns:1fr 1fr 1fr}.calculation-row .product-cell{grid-column:1/-1}}
+@media(max-width:620px){.calculation-row{grid-template-columns:1fr 1fr}.calculation-row label:last-child{grid-column:1/-1}}
