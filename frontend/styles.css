@@ -305,3 +305,13 @@ textarea { resize: vertical; }
   .calculation-total b{max-width:55%;font-size:clamp(1.2rem,7vw,1.8rem)}
   #calculationEmailBody{min-height:260px}
 }
+
+/* Version 5.6.3: eindeutig kompaktes Admin-Layout */
+.app-version-badge{position:fixed;right:8px;bottom:8px;z-index:9999;font:600 11px/1.2 system-ui,sans-serif;background:rgba(23,23,22,.82);color:#fff;padding:5px 8px;border-radius:999px;pointer-events:none}
+.admin-product-list{gap:8px!important}
+.admin-product-row{grid-template-columns:48px minmax(0,1fr) auto!important;gap:10px!important;padding:9px 10px!important;border-radius:14px!important;min-height:0!important}
+.admin-product-row>img,.admin-product-row>.image-placeholder{width:48px!important;height:48px!important;max-width:48px!important;max-height:48px!important;border-radius:10px!important;object-fit:contain!important}
+.admin-product-copy b{font-size:1rem!important;line-height:1.15!important}.admin-product-copy small{font-size:.78rem!important;line-height:1.25!important}
+.admin-product-row .admin-row-actions{grid-column:auto!important;width:auto!important;display:block!important}
+.admin-product-row .admin-row-actions button{width:auto!important;min-height:36px!important;padding:8px 11px!important;font-size:.82rem!important;border-radius:11px!important}
+@media(max-width:650px){.admin-product-row{grid-template-columns:46px minmax(0,1fr)!important}.admin-product-row>img,.admin-product-row>.image-placeholder{width:46px!important;height:46px!important}.admin-product-row .admin-row-actions{grid-column:1/-1!important}.admin-product-row .admin-row-actions button{width:100%!important;min-height:40px!important}.app-version-badge{right:6px;bottom:6px;font-size:10px}}

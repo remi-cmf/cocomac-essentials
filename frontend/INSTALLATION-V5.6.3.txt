@@ -1,0 +1,11 @@
+COCOMAC ESSENTIALS 5.6.3
+
+Diese Version ist an der kleinen Anzeige „Version 5.6.3“ unten rechts erkennbar.
+
+Wichtig:
+1. Alle Frontend-Dateien in GitHub ersetzen.
+2. Code.gs ersetzen und Web-App als NEUE VERSION bereitstellen.
+3. iPhone-App löschen und über Safari neu zum Home-Bildschirm hinzufügen.
+4. Erst weiter testen, wenn unten rechts wirklich „Version 5.6.3“ steht.
+
+E-Mail: Der Versand läuft nun bestätigt über einen JSONP-Aufruf. Kein stiller no-cors-POST mehr.

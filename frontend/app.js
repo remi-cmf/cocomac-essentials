@@ -2160,16 +2160,15 @@ async function emailProjectCalculation() {
   const originalLabel = button.textContent;
   const requestId = `mail_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   button.disabled = true;
-  button.textContent = 'Anfrage wird übermittelt …';
+  button.textContent = 'PDF und E-Mail werden erstellt …';
   try {
-    await sendCloudAction({action:'emailProjectCalculation',payload:{...calculation,requestId}});
-    await waitForEmailResult(requestId, 90000, status => {
-      if (status.status === 'creating_pdf') button.textContent = 'PDF wird erstellt …';
-      else if (status.status === 'sending') button.textContent = 'E-Mail wird verschickt …';
-    });
+    const result = await sendCloudJsonpAction('emailProjectCalculation', {...calculation, requestId}, 120000);
+    if (!result || result.ok === false || result.status !== 'sent') {
+      throw new Error(result?.error || 'Der Versand wurde vom Backend nicht bestätigt.');
+    }
     button.textContent = 'E-Mail versendet ✓';
-    toast('Der Projektbeleg wurde bestätigt per E-Mail verschickt.');
-    await sleep(1200);
+    toast(`E-Mail wirklich versendet${result.from ? ` von ${result.from}` : ''}.`);
+    await sleep(1500);
   } catch (error) {
     console.error('E-Mail-Versand fehlgeschlagen', error);
     toast(error.message || 'E-Mail konnte nicht verschickt werden.');
