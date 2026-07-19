@@ -1,0 +1,9 @@
+COCOMAC ESSENTIALS 5.3
+
+Neu:
+- QR-Scanner direkt beim Hinzufügen von Equipment zu einem Projekt.
+- Gescannte Artikelnummer wählt das Produkt automatisch aus.
+- Positions- und Gesamtrabatte nur noch in ganzen Prozenten.
+
+Installation:
+Alle Frontend-Dateien im GitHub-Repository ersetzen und die Seite anschließend vollständig neu laden.

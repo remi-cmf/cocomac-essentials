@@ -1,0 +1,14 @@
+COCOMAC ESSENTIALS 5.2.3
+
+1. Den kompletten Inhalt dieses Ordners in das GitHub-Repository hochladen.
+2. Bestehende Dateien ersetzen.
+3. GitHub Pages kurz abwarten.
+4. Mac: Cmd + Shift + R. iPhone: App vollständig schließen und neu öffnen.
+
+Neu:
+- Sofortige Anzeige bei Produkt-, Projekt- und Buchungsänderungen.
+- Google-Sheets-Synchronisierung läuft im Hintergrund.
+- Große lokale Importdatei wird nicht mehr beim Start geladen.
+- Drive-Dateiliste wird nicht mehr bei jedem Datenabgleich geladen.
+- Hintergrundabgleich alle 60 statt 20 Sekunden, zusätzlich weiterhin bei Fokus/Rückkehr.
+- Mietpreis ist ein Festpreis pro Buchung und Stück, nicht pro Tag.

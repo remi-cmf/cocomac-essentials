@@ -19,6 +19,8 @@ let deferredPrompt = null;
 let html5QrCode = null;
 let scannerRunning = false;
 let scanResultHandled = false;
+let scanTarget = 'detail';
+let reservationScanSnapshot = null;
 let selectedProductImage = null;
 let imageLibrary = [];
 let projects = [];
@@ -32,11 +34,9 @@ let lastCloudSyncAt = 0;
 let automaticImageSyncAttempted = false;
 
 async function boot() {
-  baseCatalog = await fetch('./data/equipment.json', { cache: 'no-store' })
-    .then(response => {
-      if (!response.ok) throw new Error('equipment.json konnte nicht geladen werden.');
-      return response.json();
-    });
+  // Google Sheets ist die zentrale Datenquelle. Die große lokale Importdatei
+  // wird nicht mehr bei jedem Start heruntergeladen.
+  baseCatalog = [];
 
   state = readJson(LOCAL_KEY, { movements: [] });
   await refreshCatalog();
@@ -88,7 +88,7 @@ async function refreshCatalog() {
   projects = (snapshot.projects || []).map(normalizeProject).sort((a,b) => String(b.start).localeCompare(String(a.start)));
   reservations = (snapshot.reservations || []).map(normalizeReservation);
   damages = Array.isArray(snapshot.damages) ? snapshot.damages.map(normalizeDamage) : [];
-  imageLibrary = Array.isArray(snapshot.images) ? snapshot.images : [];
+  if (Array.isArray(snapshot.images)) imageLibrary = snapshot.images;
   applyLocalDriveImageMatches();
 
   // Die Zuordnung wird einmal pro Sitzung automatisch in Google Sheets gespeichert.
@@ -137,7 +137,7 @@ function setupAutomaticCloudSync() {
     if (document.visibilityState === 'visible' && navigator.onLine) {
       syncFromCloud();
     }
-  }, 20000);
+  }, 60000);
 }
 
 function normalizeProduct(item) {
@@ -317,7 +317,7 @@ function openDetail(id) {
     </div>
     <p>
       <b>Maße:</b> ${escapeHtml(item.dimensions || '–')}<br>
-      <b>Tagespreis:</b> ${item.dailyPrice ? item.dailyPrice.toFixed(2) + ' €' : '–'}<br>
+      <b>Mietpreis:</b> ${item.dailyPrice ? item.dailyPrice.toFixed(2) + ' €' : '–'}<br>
       <b>Wiederbeschaffung:</b> ${item.replacementValue ? item.replacementValue.toFixed(2) + ' €' : '–'}
       ${item.notes ? '<br><b>Notiz:</b> ' + escapeHtml(item.notes) : ''}
     </p>
@@ -810,37 +810,31 @@ async function submitProduct(event) {
   if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
   const saveButton = $('#saveProductBtn');
   saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
+  const previousCatalog = [...catalog];
+  const productIndex = catalog.findIndex(item => item.id === product.id);
+  if (productIndex >= 0) catalog[productIndex] = product; else catalog.unshift(product);
+  render();
+  $('#productDialog').close();
+  openDetail(product.id);
+  toast(existing ? 'Produkt aktualisiert. Synchronisierung läuft.' : `${product.id} wurde angelegt. Synchronisierung läuft.`);
   try {
     const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
     if (selectedProductImage?.dataUrl) {
       await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
+      // Bild-Uploads laufen technisch ohne direkte Browserantwort. Ein späterer Hintergrundabgleich übernimmt die endgültige URL.
+      setTimeout(() => syncFromCloud({force:true}), 1500);
     } else {
-      await sendCloudJsonpAction('addProduct', adminPayload(payload));
+      const response = await sendCloudJsonpAction('addProduct', adminPayload(payload));
+      if (response?.product) {
+        const saved = normalizeProduct(response.product);
+        const savedIndex = catalog.findIndex(item => item.id === saved.id);
+        if (savedIndex >= 0) catalog[savedIndex] = saved;
+      }
     }
-
-    // Apps Script kann bei Bild-Uploads wegen no-cors keine direkte Antwort liefern.
-    // Deshalb prüfen wir danach ausdrücklich, ob das Produkt wirklich gespeichert wurde.
-    let savedProduct = null;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 700 : 1200));
-      await syncFromCloud({force:true});
-      savedProduct = catalog.find(item => item.id === product.id);
-      const matches = savedProduct
-        && savedProduct.name === product.name
-        && Number(savedProduct.total) === Number(product.total)
-        && Number(savedProduct.dailyPrice || 0) === Number(product.dailyPrice || 0);
-      if (matches) break;
-      savedProduct = null;
-    }
-
-    if (!savedProduct) {
-      throw new Error('Die Änderung wurde nicht in Google Sheets bestätigt. Bitte die Admin-Anmeldung und die aktuelle Apps-Script-Bereitstellung prüfen.');
-    }
-
-    $('#productDialog').close();
-    toast(existing ? 'Produkt wurde aktualisiert.' : `${product.id} wurde angelegt.`);
-    openDetail(product.id);
-  } catch (error) { toast('Produkt konnte nicht gespeichert werden: ' + error.message); }
+  } catch (error) {
+    catalog = previousCatalog; render();
+    toast('Produkt konnte nicht synchronisiert werden: ' + error.message);
+  }
   finally { saveButton.disabled = false; saveButton.textContent = existing ? 'Änderungen speichern' : 'Produkt speichern'; }
 }
 
@@ -1024,13 +1018,22 @@ function bind() {
   $('#syncDriveImagesBtn').onclick = syncDriveImages;
   bindImageUpload();
 
-  $('#scanBtn').onclick = () => $('#scanDialog').showModal();
+  $('#scanBtn').onclick = () => {
+    scanTarget = 'detail';
+    reservationScanSnapshot = null;
+    $('#scanDialog').showModal();
+  };
+  $('#reservationScanBtn').onclick = openReservationScanner;
 
   $$('[data-close]').forEach(button => {
     button.onclick = async () => {
       const dialog = button.closest('dialog');
       if (dialog.id === 'scanDialog') await stopCameraScan();
       dialog.close();
+      if (dialog.id === 'scanDialog' && scanTarget === 'reservation' && reservationScanSnapshot) {
+        restoreReservationAfterScan('');
+        scanTarget = 'detail';
+      }
       if (dialog.id === 'detailDialog') {
         const url = new URL(location.href);
         url.searchParams.delete('id');
@@ -1070,7 +1073,7 @@ function bind() {
     event.preventDefault();
     await stopCameraScan();
     $('#scanDialog').close();
-    openDetail(extractArticleId($('#manualId').value.trim()));
+    handleScannedArticle(extractArticleId($('#manualId').value.trim()));
   };
 
   $('#cameraScanBtn').onclick = startCameraScan;
@@ -1142,7 +1145,7 @@ async function startCameraScan() {
         setScannerStatus(`Erkannt: ${id}`);
         await stopCameraScan();
         $('#scanDialog').close();
-        openDetail(id);
+        handleScannedArticle(id);
         setTimeout(() => { scanResultHandled = false; }, 1000);
       },
       () => {}
@@ -1356,8 +1359,18 @@ async function submitProject(event) {
   const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-  if(settings().cloudMode) await sendCloudJsonpAction('saveProject',project);
-  await refreshCatalog(); render(); $('#projectDialog').close(); showPage('projectsPage'); openProjectDetail(project.id); toast('Projekt gespeichert.');
+  const previousProjects = [...projects];
+  const index = projects.findIndex(item => item.id === project.id);
+  if (index >= 0) projects[index] = project; else projects.unshift(project);
+  projects.sort((a,b) => String(b.start).localeCompare(String(a.start)));
+  render(); $('#projectDialog').close(); showPage('projectsPage'); openProjectDetail(project.id);
+  toast('Projekt gespeichert. Synchronisierung läuft im Hintergrund.');
+  try {
+    if(settings().cloudMode) await sendCloudJsonpAction('saveProject',project);
+  } catch (error) {
+    projects = previousProjects; render();
+    toast('Projekt konnte nicht synchronisiert werden: ' + error.message);
+  }
 }
 function projectReservations(projectId) { return reservations.filter(r=>r.projectId===projectId && r.status!=='Storniert'); }
 function openProjectDetail(projectId) {
@@ -1373,6 +1386,52 @@ function openProjectDetail(projectId) {
 function projectOptionLabel(project) {
   const number = project.number ? ` · ${project.number}` : '';
   return `${project.name}${number} (${formatDate(project.start)}–${formatDate(project.end)})`;
+}
+
+function openReservationScanner() {
+  reservationScanSnapshot = {
+    projectId: $('#reservationProject')?.value || '',
+    editId: $('#reservationEditId')?.value || '',
+    origin: reservationOrigin,
+    quantity: $('#reservationQuantity')?.value || '1',
+    status: $('#reservationStatus')?.value || 'Reserviert',
+    from: $('#reservationFrom')?.value || '',
+    to: $('#reservationTo')?.value || '',
+    note: $('#reservationNote')?.value || ''
+  };
+  scanTarget = 'reservation';
+  $('#reservationDialog').close();
+  $('#scanDialog').showModal();
+}
+
+function handleScannedArticle(id) {
+  const normalizedId = String(id || '').trim().toUpperCase();
+  const product = catalog.find(item => String(item.id).toUpperCase() === normalizedId);
+  if (!product) {
+    toast(`Kein Produkt mit der Artikelnummer ${normalizedId} gefunden.`);
+    if (scanTarget === 'reservation' && reservationScanSnapshot) restoreReservationAfterScan('');
+    return;
+  }
+  if (scanTarget === 'reservation' && reservationScanSnapshot) {
+    restoreReservationAfterScan(product.id);
+    toast(`${product.name} wurde ausgewählt.`);
+  } else {
+    openDetail(product.id);
+  }
+  scanTarget = 'detail';
+}
+
+function restoreReservationAfterScan(productId) {
+  const snapshot = reservationScanSnapshot;
+  reservationScanSnapshot = null;
+  if (!snapshot) return;
+  openReservationDialog(snapshot.projectId, productId, snapshot.origin, snapshot.editId);
+  $('#reservationQuantity').value = snapshot.quantity;
+  $('#reservationStatus').value = snapshot.status;
+  if (snapshot.from) $('#reservationFrom').value = snapshot.from;
+  if (snapshot.to) $('#reservationTo').value = snapshot.to;
+  $('#reservationNote').value = snapshot.note;
+  updateReservationAvailability();
 }
 
 function openReservationDialog(projectId = '', productId = '', origin = 'project', reservationId = '') {
@@ -1512,55 +1571,45 @@ async function submitReservation(event) {
     note: $('#reservationNote').value.trim()
   });
 
-  if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) {
-    toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
-    return;
-  }
-  if (r.to < r.from) {
-    toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-    return;
-  }
+  if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) return toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
+  if (r.to < r.from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   const available = availableFor(r.productId, r.from, r.to, r.id);
-  if (r.quantity > available) {
-    toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
-    return;
+  if (r.quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
+
+  const previousReservations = [...reservations];
+  const existingIndex = reservations.findIndex(item => String(item.id) === String(r.id));
+  if (existingIndex >= 0) reservations[existingIndex] = r; else reservations.push(r);
+
+  // Sofortige Reaktion: Dialog schließen und Projektansicht aktualisieren.
+  $('#reservationDialog').close();
+  render();
+  if (reservationOrigin === 'project') {
+    showPage('projectsPage');
+    openProjectDetail(r.projectId);
+  } else {
+    openDetail(r.productId);
   }
+  toast(editId ? 'Änderung gespeichert. Synchronisierung läuft.' : 'Equipment hinzugefügt. Synchronisierung läuft.');
 
   try {
-    if (button) {
-      button.disabled = true;
-      button.textContent = editId ? 'Änderungen werden gespeichert …' : 'Equipment wird hinzugefügt …';
-    }
-
-    if (!settings().cloudMode) throw new Error('Die Cloud-Verbindung ist nicht aktiv. Bitte unter „Verbindung“ prüfen.');
+    if (button) { button.disabled = true; button.textContent = 'Synchronisierung …'; }
+    if (!settings().cloudMode) throw new Error('Die Cloud-Verbindung ist nicht aktiv.');
     const response = await sendCloudJsonpAction('saveReservation', r);
-    if (!response || response.ok === false) throw new Error(response?.error || 'Die Buchung wurde vom Backend nicht bestätigt.');
-
-    await refreshCatalog();
-    const saved = reservations.find(item => String(item.id) === String(r.id));
-    if (!saved) throw new Error('Die Buchung wurde nicht im Tabellenblatt „Reservierungen“ gefunden. Bitte die Apps-Script-Bereitstellung aktualisieren.');
-
-    render();
-    $('#reservationDialog').close();
-    if (reservationOrigin === 'project') {
-      $('#projectDetailDialog').close();
-      openProjectDetail(r.projectId);
-    } else {
-      openDetail(r.productId);
+    if (!response || response.ok === false) throw new Error(response?.error || 'Die Buchung wurde nicht bestätigt.');
+    if (response.reservation) {
+      const confirmed = normalizeReservation(response.reservation);
+      const confirmedIndex = reservations.findIndex(item => String(item.id) === String(confirmed.id));
+      if (confirmedIndex >= 0) reservations[confirmedIndex] = confirmed;
     }
-    toast(editId ? 'Equipment-Buchung wurde aktualisiert.' : 'Equipment wurde dem Projekt zugeordnet.');
   } catch (error) {
-    console.error('Reservierung konnte nicht gespeichert werden:', error);
-    toast(error?.message || 'Die Buchung konnte nicht gespeichert werden.');
+    reservations = previousReservations;
+    render();
+    if (reservationOrigin === 'project') openProjectDetail(r.projectId); else openDetail(r.productId);
+    toast('Buchung konnte nicht synchronisiert werden: ' + error.message);
   } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = originalText;
-      updateReservationAvailability();
-    }
+    if (button) { button.disabled = false; button.textContent = originalText; }
   }
 }
-
 
 async function removeReservationFromProject() {
   const reservationId = $('#reservationEditId').value;
@@ -1724,8 +1773,8 @@ function renderCalculationRows() {
     <div class="calculation-row" data-calculation-index="${index}">
       <div class="product-cell"><b>${escapeHtml(line.name)}</b><br><small>${escapeHtml(line.productId)} · Bestand ${line.stock}<br>${formatDate(line.from)}–${formatDate(line.to)} · ${line.days} Tag${line.days===1?'':'e'}</small></div>
       <label>Menge<input data-calc-field="quantity" type="number" min="0" step="1" value="${line.quantity}"></label>
-      <label>Preis / Tag<input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
-      <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="0.01" value="${line.discount}"></label>
+      <label>Mietpreis / Stück<input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
+      <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="1" inputmode="numeric" value="${Math.round(Number(line.discount || 0))}"></label>
       <label class="checkbox-line"><input data-calc-field="free" type="checkbox" ${line.free?'checked':''}> Kostenlos</label>
     </div>`).join('') : '<div class="empty-state">Noch kein Equipment im Projekt.</div>';
   $$('[data-calculation-index]').forEach(row => {
@@ -1733,7 +1782,15 @@ function renderCalculationRows() {
     row.querySelectorAll('[data-calc-field]').forEach(input => {
       input.oninput = input.onchange = () => {
         const field = input.dataset.calcField;
-        activeCalculation.lines[index][field] = field === 'free' ? input.checked : Number(input.value || 0);
+        if (field === 'free') {
+          activeCalculation.lines[index][field] = input.checked;
+        } else if (field === 'discount') {
+          const rounded = Math.min(100, Math.max(0, Math.round(Number(input.value || 0))));
+          input.value = String(rounded);
+          activeCalculation.lines[index][field] = rounded;
+        } else {
+          activeCalculation.lines[index][field] = Number(input.value || 0);
+        }
         updateCalculationTotal();
       };
     });
@@ -1742,7 +1799,8 @@ function renderCalculationRows() {
 }
 
 function readCalculationForm() {
-  activeCalculation.discount = Number($('#calculationDiscount').value || 0);
+  activeCalculation.discount = Math.min(100, Math.max(0, Math.round(Number($('#calculationDiscount').value || 0))));
+  $('#calculationDiscount').value = String(activeCalculation.discount);
   activeCalculation.extraCost = Number($('#calculationExtraCost').value || 0);
   activeCalculation.extraLabel = $('#calculationExtraLabel').value.trim();
   activeCalculation.taxMode = $('#calculationTaxMode').value;
@@ -1761,7 +1819,7 @@ function readCalculationForm() {
 
 function calculationTotals(calculation) {
   let subtotal = calculation.lines.reduce((sum,line)=>{
-    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.days||1)*Number(line.unitPrice||0);
+    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.unitPrice||0);
     return sum + base * (1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
   },0);
   subtotal *= 1-Math.min(100,Math.max(0,Number(calculation.discount||0)))/100;
@@ -1781,14 +1839,14 @@ function projectCalculationHtml(calculation) {
   if (!p) throw new Error('Projekt nicht gefunden.');
   const totals = calculationTotals(calculation);
   const rows = calculation.lines.map(line=>{
-    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.days||1)*Number(line.unitPrice||0);
+    const base = line.free ? 0 : Number(line.quantity||0)*Number(line.unitPrice||0);
     const lineTotal = base*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
     return `<tr><td>${escapeHtml(line.productId)}</td><td><b>${escapeHtml(line.name)}</b><br><small>Gesamtbestand: ${line.stock}</small></td><td>${line.quantity}</td><td>${formatDate(line.from)} – ${formatDate(line.to)}<br><small>${line.days} Tag${line.days===1?'':'e'}</small></td><td>${line.free?'kostenlos':euro(line.unitPrice)}</td><td>${line.discount?line.discount+' %':'–'}</td><td>${euro(lineTotal)}</td></tr>`;
   }).join('');
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Tag</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="text-align:center;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Mietpreis / Stück</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="text-align:center;margin-top:40px"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 
 function previewProjectCalculation() {
@@ -1824,7 +1882,7 @@ function projectDocumentHtml(projectId) {
     const item = catalog.find(x => x.id === r.productId);
     const days = rentalDays(r.from, r.to);
     const unitPrice = Number(item?.dailyPrice || 0);
-    const lineTotal = unitPrice * Number(r.quantity || 0) * days;
+    const lineTotal = unitPrice * Number(r.quantity || 0);
     grandTotal += lineTotal;
     return `<tr>
       <td>${escapeHtml(r.productId)}</td>
@@ -1840,7 +1898,7 @@ function projectDocumentHtml(projectId) {
   const damageItems = projectDamages.map(d => { const item = catalog.find(x => x.id === d.productId); return `<tr class="damage-line"><td>${escapeHtml(d.productId)}</td><td><b>Schaden: ${escapeHtml(item?.name || d.productId)}</b><br><small>${escapeHtml(d.description)}</small></td><td>${d.quantity}</td><td>${formatDate(d.date)}</td><td>${euro(d.unitValue)}</td><td>${euro(d.totalValue)}</td></tr>`; }).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipment ${escapeHtml(p.name)}</title><style>
     *{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1100px;margin:auto}h1{margin:8px 0 4px}h2{margin:0 0 16px}.project-number{font-weight:700;letter-spacing:.05em}.meta{line-height:1.7;margin:18px 0}.table-wrap{width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:24px;min-width:780px}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em}small{color:#666}.total{margin:20px 0 0 auto;width:min(340px,100%);display:flex;justify-content:space-between;border-top:2px solid #171716;padding-top:12px;font-size:18px}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media(max-width:700px){body{padding:18px}.sign{gap:30px}.line{width:50%}}@media print{body{padding:0}.table-wrap{overflow:visible}table{min-width:0}.no-print{display:none}}
-  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Preis / Tag</th><th>Mietpreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}${damageItems}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Mietpreis / Stück</th><th>Positionspreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}${damageItems}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 function printProjectDocument(projectId) {
   let html;

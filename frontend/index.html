@@ -317,7 +317,7 @@
         <label>Menge<input id="productTotal" type="number" min="1" value="1" required></label>
         <label>Zustand<select id="productCondition"><option>Sehr gut</option><option selected>Gut</option><option>Gebraucht</option><option>Reparatur nötig</option></select></label>
         <label>Maße<input id="productDimensions" placeholder="optional"></label>
-        <label>Tagespreis / Mietpreis in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
+        <label>Mietpreis pro Buchung und Stück in €<input id="productDailyPrice" type="number" min="0" step="0.01" placeholder="optional"></label>
         <label>Anschaffungspreis in €<input id="productPurchasePrice" type="number" min="0" step="0.01" placeholder="optional"></label>
         <label>Wiederbeschaffung in €<input id="productReplacementValue" type="number" min="0" step="0.01" placeholder="optional"></label>
         <label>Gewicht<input id="productWeight" placeholder="z. B. 4,2 kg"></label>
@@ -371,7 +371,12 @@
       <label>Projekt<select id="reservationProject" required></select></label>
       <div id="reservationProjectInfo" class="reservation-project-info"></div>
 
-      <label>Produkt<select id="reservationProduct" required></select></label>
+      <label>Produkt
+        <div class="reservation-product-picker">
+          <select id="reservationProduct" required></select>
+          <button id="reservationScanBtn" type="button" class="ghost">QR scannen</button>
+        </div>
+      </label>
       <div id="reservationAvailability" class="availability-note"></div>
 
       <div class="form-columns">
@@ -455,7 +460,7 @@
       <div id="calculationProjectMeta" class="project-meta-grid"></div>
       <div id="calculationRows" class="calculation-rows"></div>
       <div class="form-columns">
-        <label>Gesamtrabatt in %<input id="calculationDiscount" type="number" min="0" max="100" step="0.01" value="0"></label>
+        <label>Gesamtrabatt in %<input id="calculationDiscount" type="number" min="0" max="100" step="1" inputmode="numeric" value="0"></label>
         <label>Zusätzliche Kosten<input id="calculationExtraCost" type="number" min="0" step="0.01" value="0"></label>
         <label>Bezeichnung Zusatzkosten<input id="calculationExtraLabel" placeholder="z. B. Transport"></label>
         <label>Preisanzeige<select id="calculationTaxMode"><option value="net">Netto</option><option value="gross">Brutto inkl. 19 % MwSt.</option></select></label>
