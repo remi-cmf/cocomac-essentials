@@ -1,0 +1,11 @@
+COCOMAC ESSENTIALS – VERSION 5.4.2
+
+1. Den gesamten Inhalt dieses Ordners in GitHub hochladen und vorhandene Dateien ersetzen.
+2. Nach dem Deployment auf dem Mac Cmd + Shift + R drücken.
+3. Auf dem iPhone die App vollständig schließen und erneut öffnen.
+
+Foto-Upload:
+- Foto auswählen.
+- Die Vorschau muss „bereit zum Speichern“ zeigen.
+- Danach unten „Produkt speichern“ drücken.
+- Das Fenster bleibt offen, bis Drive und Google Sheets das Bild bestätigt haben.

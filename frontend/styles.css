@@ -222,10 +222,99 @@ textarea { resize: vertical; }
 /* Version 5.4: QR-Code-Datenbank */
 .qr-database-controls{display:grid;grid-template-columns:minmax(180px,260px) auto auto;gap:12px;align-items:end;margin:14px 0}.qr-database-controls label{margin:0}.input-with-button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.qr-code-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;overflow-wrap:anywhere}.qr-status-free{color:#1f7a51}.qr-status-assigned{color:#745b18}@media(max-width:720px){.qr-database-controls{grid-template-columns:1fr}.input-with-button{grid-template-columns:1fr}.input-with-button button{width:100%}}
 
+/* Version 5.4.3: Administration auf kleinen Displays */
+@media (max-width: 700px) {
+  #adminPage .page-heading {
+    display: block;
+    margin-bottom: 14px;
+  }
+  /* Der Seitentitel steht bereits oben in der festen Kopfzeile. */
+  #adminPage .page-heading > div:first-child {
+    display: none;
+  }
+  #adminPage .admin-heading-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  #adminPage .admin-heading-actions button {
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 8px;
+    font-size: 14px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  #adminPage #adminAddProductBtn {
+    grid-column: 1 / -1;
+  }
 
-/* V5.4.1: sichtbare QR-Code-Datenbank */
-.qr-admin-card{display:grid;grid-template-columns:124px minmax(0,1fr) auto;gap:16px;align-items:center;padding:14px;border:1px solid var(--line,#ddd);border-radius:14px;background:#fff}
-.qr-admin-preview{width:112px;height:112px;display:grid;place-items:center;background:#fff;border-radius:10px;overflow:hidden}
-.qr-admin-preview canvas,.qr-admin-preview img{display:block;max-width:100%;height:auto}
-.qr-admin-info{min-width:0}
-@media(max-width:720px){.qr-admin-card{grid-template-columns:88px minmax(0,1fr);gap:12px}.qr-admin-preview{width:80px;height:80px}.qr-admin-preview canvas,.qr-admin-preview img{width:80px!important;height:80px!important}.qr-admin-card .admin-row-actions{grid-column:1/-1;display:flex;gap:8px}.qr-admin-card .admin-row-actions button{flex:1}}
+  .admin-product-row,
+  .admin-project-row {
+    grid-template-columns: 58px minmax(0, 1fr) !important;
+    gap: 10px;
+    padding: 12px;
+    align-items: start;
+    overflow: hidden;
+  }
+  .admin-product-row > img,
+  .admin-product-row > .image-placeholder {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    border-radius: 12px;
+  }
+  .admin-product-row > div:nth-child(2),
+  .admin-project-row > div:nth-child(2) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .admin-product-row > div:nth-child(2) b,
+  .admin-project-row > div:nth-child(2) b {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+  .admin-product-row > div:nth-child(2) small,
+  .admin-project-row > div:nth-child(2) small {
+    display: inline-block;
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+  .admin-product-row .admin-row-actions,
+  .admin-project-row .admin-row-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    justify-content: stretch;
+  }
+  .admin-product-row .admin-row-actions button,
+  .admin-project-row .admin-row-actions button,
+  .admin-product-row .danger {
+    width: 100% !important;
+    min-width: 0;
+    min-height: 46px;
+    padding: 10px 8px;
+    font-size: 15px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: visible;
+  }
+  .admin-intro {
+    font-size: 15px;
+    line-height: 1.4;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  #adminPage .admin-heading-actions,
+  .admin-product-row .admin-row-actions,
+  .admin-project-row .admin-row-actions {
+    grid-template-columns: 1fr;
+  }
+  #adminPage #adminAddProductBtn { grid-column: auto; }
+}

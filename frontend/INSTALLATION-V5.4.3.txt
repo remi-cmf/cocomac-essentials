@@ -1,0 +1,10 @@
+COCOMAC ESSENTIALS 5.4.3
+
+Mobile Layout-Fix für die Administration:
+- Admin-Aktionen bleiben vollständig innerhalb der Bildschirmbreite.
+- Der doppelte Seitentitel wird mobil ausgeblendet.
+- Bearbeiten und Löschen stehen kompakt nebeneinander.
+- Produkt- und Projektkarten können nicht mehr horizontal überstehen.
+
+Alle Dateien aus diesem Ordner ins GitHub-Repository hochladen und bestehende Dateien ersetzen.
+Danach die Seite neu laden beziehungsweise die PWA vollständig schließen und erneut öffnen.
