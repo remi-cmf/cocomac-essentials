@@ -1,0 +1,13 @@
+COCOMAC ESSENTIALS 5.4.4
+
+1. Alle Dateien dieses Ordners in das GitHub-Repository hochladen und vorhandene Dateien ersetzen.
+2. GitHub Pages abwarten.
+3. Auf dem Mac Cmd+Shift+R.
+4. Auf dem iPhone die App vollständig schließen und neu öffnen. Falls noch alter Code sichtbar ist, die Home-Bildschirm-App löschen und neu hinzufügen.
+
+Behoben:
+- QR-Code-Datenbank wird nur noch im geschützten Administrationsbereich geladen.
+- Kein Admin-Fehler mehr auf der Equipment-Startseite.
+- Foto-Upload bleibt sichtbar geöffnet, bis Drive und Google Sheets die Bild-URL bestätigt haben.
+- Klarer Uploadstatus und verständliche Fehlermeldungen.
+- Mobiles Adminlayout ohne abgeschnittene Buttons.

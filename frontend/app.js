@@ -295,13 +295,12 @@ function render() {
   });
 
   const currentSettings = settings();
-  $('#syncBanner').textContent = 'Synchronisierung aktiv: Änderungen werden über Google Sheets auf allen Geräten übernommen.';
+  $('#syncBanner').textContent = 'Synchronisiert';
   $('#syncBanner').classList.remove('demo');
   renderProjects();
   if (!$('#adminPage')?.classList.contains('hidden')) { renderAdminProjects(); renderAdminProducts(); renderQrDatabase(); }
   renderCalendar();
   renderAdminProducts();
-  loadQrCodes().catch(error => toast('QR-Code-Datenbank konnte nicht geladen werden: ' + error.message));
 }
 
 function openDetail(id) {
@@ -750,23 +749,17 @@ function bindImageUpload() {
 
 async function handleImageFile(file) {
   if (!file) return;
-  const mime = String(file.type || '').toLowerCase();
-  if (mime && !mime.startsWith('image/')) return toast('Bitte eine Bilddatei auswählen.');
-  if (file.size > 15 * 1024 * 1024) return toast('Das Foto darf höchstens 15 MB groß sein.');
+  if (!file.type.startsWith('image/')) return toast('Bitte eine Bilddatei auswählen.');
+  if (file.size > 10 * 1024 * 1024) return toast('Das Foto darf höchstens 10 MB groß sein.');
 
-  const preview = $('#productImagePreview');
-  if (preview) preview.innerHTML = '<span>Foto wird vorbereitet …</span>';
   try {
-    // Kleinere Datei = deutlich zuverlässigerer Upload auf iPhone und über Google Apps Script.
     selectedProductImage = await compressImage(file, 1200, 0.72);
     if ($('#productDriveImage')) $('#productDriveImage').value = '';
-    if (preview) preview.innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)} · bereit zum Speichern</span>`;
-    toast('Foto ausgewählt. Jetzt unten auf „Produkt speichern“ tippen.');
+    $('#productImagePreview').innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)} · bereit zum Hochladen</span>`;
+    const status = $('#productSaveStatus');
+    if (status) { status.hidden = false; status.textContent = 'Foto ausgewählt. Tippe unten auf Produkt speichern.'; }
   } catch (error) {
-    console.error('Fotoverarbeitung fehlgeschlagen:', error);
-    selectedProductImage = null;
-    if (preview) preview.innerHTML = '<span>Foto konnte nicht verarbeitet werden</span>';
-    toast('Foto konnte nicht verarbeitet werden. Bitte ein anderes Bild ausprobieren.');
+    toast('Foto konnte nicht verarbeitet werden.');
   }
 }
 
@@ -802,9 +795,8 @@ async function submitProduct(event) {
     toast('Speichern ist nur mit aktiver Google-Sheets-Verbindung möglich.');
     return;
   }
-
   if (!(await ensureAdminAccess())) {
-    toast('Bitte zuerst als Administrator anmelden und anschließend erneut auf Speichern tippen.');
+    toast('Bitte zuerst als Administrator anmelden und danach erneut speichern.');
     return;
   }
 
@@ -815,79 +807,98 @@ async function submitProduct(event) {
   const product = normalizeProduct({
     ...existing,
     id,
-    name: $('#productName').value.trim(), category,
-    location: $('#productLocation').value.trim(), total: Number($('#productTotal').value),
-    condition: $('#productCondition').value, description: $('#productDescription').value.trim(),
-    dimensions: $('#productDimensions').value.trim(), dailyPrice: Number($('#productDailyPrice').value || 0),
+    name: $('#productName').value.trim(),
+    category,
+    location: $('#productLocation').value.trim(),
+    total: Number($('#productTotal').value),
+    condition: $('#productCondition').value,
+    description: $('#productDescription').value.trim(),
+    dimensions: $('#productDimensions').value.trim(),
+    dailyPrice: Number($('#productDailyPrice').value || 0),
     replacementValue: Number($('#productReplacementValue').value || 0),
-    purchasePrice: Number($('#productPurchasePrice').value || 0), weight: $('#productWeight').value.trim(),
-    manufacturer: $('#productManufacturer').value.trim(), serialNumber: $('#productSerialNumber').value.trim(),
+    purchasePrice: Number($('#productPurchasePrice').value || 0),
+    weight: $('#productWeight').value.trim(),
+    manufacturer: $('#productManufacturer').value.trim(),
+    serialNumber: $('#productSerialNumber').value.trim(),
     qrCode: normalizeQrCode($('#productQrCode').value),
-    purchaseDate: $('#productPurchaseDate').value, notes: $('#productNotes').value.trim(),
-    productUrl: makeProductUrl(id), imageUrl: selectedProductImage?.existingUrl || existing?.imageUrl || ''
+    purchaseDate: $('#productPurchaseDate').value,
+    notes: $('#productNotes').value.trim(),
+    productUrl: makeProductUrl(id),
+    imageUrl: selectedProductImage?.existingUrl || existing?.imageUrl || ''
   });
+
   if (!product.name || !product.category || !product.location) return toast('Bitte Name, Kategorie und Standort ausfüllen.');
   if ($('#productQrCode').value.trim() && !product.qrCode) return toast('Der QR-Code hat kein gültiges Format.');
   if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
+
   const saveButton = $('#saveProductBtn');
-  saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
-  const previousCatalog = [...catalog];
+  const status = $('#productSaveStatus');
+  const originalLabel = existing ? 'Änderungen speichern' : 'Produkt speichern';
+  saveButton.disabled = true;
+  saveButton.textContent = selectedProductImage?.dataUrl ? 'Foto wird hochgeladen …' : 'Wird gespeichert …';
+  if (status) {
+    status.hidden = false;
+    status.textContent = selectedProductImage?.dataUrl
+      ? 'Das Foto wird in Google Drive gespeichert. Bitte dieses Fenster geöffnet lassen.'
+      : 'Das Produkt wird in Google Sheets gespeichert.';
+  }
+
   try {
-    const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
-    if (selectedProductImage?.dataUrl) {
-      saveButton.textContent = 'Foto wird hochgeladen …';
-      await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
-      saveButton.textContent = 'Speicherung wird geprüft …';
-      const saved = await waitForSavedProduct(id, {
-        requireImage: true,
-        previousImageUrl: existing?.imageUrl || '',
-        timeoutMs: 50000
-      });
-      const savedIndex = catalog.findIndex(item => item.id === saved.id);
-      if (savedIndex >= 0) catalog[savedIndex] = saved; else catalog.unshift(saved);
-      toast('Produkt und Foto wurden gespeichert.');
+    const payload = {
+      ...product,
+      imageBase64: selectedProductImage?.dataUrl || '',
+      imageName: `${id}.jpg`
+    };
+
+    let savedProduct;
+    if (payload.imageBase64) {
+      // Große Bilddaten werden per POST übertragen. Anschließend wird so lange geprüft,
+      // bis Google Sheets die neue Drive-URL bestätigt.
+      await sendCloudAction({ action: 'addProduct', payload: adminPayload(payload) });
+      savedProduct = await waitForSavedProduct(id, { requireImage: true, timeoutMs: 60000 });
     } else {
       const response = await sendCloudJsonpAction('addProduct', adminPayload(payload));
-      const saved = normalizeProduct(response?.product || product);
-      const savedIndex = catalog.findIndex(item => item.id === saved.id);
-      if (savedIndex >= 0) catalog[savedIndex] = saved; else catalog.unshift(saved);
-      toast(existing ? 'Produkt wurde aktualisiert.' : `${product.id} wurde angelegt.`);
+      savedProduct = response?.product ? normalizeProduct(response.product) : await waitForSavedProduct(id, { timeoutMs: 20000 });
     }
+
+    const savedIndex = catalog.findIndex(item => item.id === savedProduct.id);
+    if (savedIndex >= 0) catalog[savedIndex] = savedProduct;
+    else catalog.unshift(savedProduct);
+
+    selectedProductImage = null;
     render();
-    $('#productDialog').close();
-    openDetail(product.id);
+    if (status) status.textContent = savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.';
+    toast(savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.');
+    setTimeout(() => {
+      if ($('#productDialog')?.open) $('#productDialog').close();
+      openDetail(savedProduct.id);
+    }, 350);
   } catch (error) {
-    catalog = previousCatalog;
-    render();
-    console.error('Produktspeicherung fehlgeschlagen:', error);
-    toast('Produkt konnte nicht gespeichert werden: ' + error.message);
+    console.error('Produkt speichern fehlgeschlagen:', error);
+    if (status) status.textContent = 'Speichern fehlgeschlagen: ' + (error.message || 'Unbekannter Fehler');
+    toast('Produkt konnte nicht gespeichert werden: ' + (error.message || 'Unbekannter Fehler'));
+  } finally {
+    saveButton.disabled = false;
+    saveButton.textContent = originalLabel;
   }
-  finally { saveButton.disabled = false; saveButton.textContent = existing ? 'Änderungen speichern' : 'Produkt speichern'; }
 }
 
 async function waitForSavedProduct(productId, options = {}) {
-  const timeoutMs = Number(options.timeoutMs || 45000);
+  const { requireImage = false, timeoutMs = 30000 } = options;
   const started = Date.now();
   let lastError = null;
   while (Date.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 1800));
     try {
       const snapshot = await loadCloudSnapshot(settings().apiUrl);
-      const foundRaw = (snapshot.products || []).find(item => String(item.id) === String(productId));
-      if (foundRaw) {
-        const found = normalizeProduct(foundRaw);
-        const hasImage = Boolean(String(found.imageUrl || '').trim());
-        const imageChanged = !options.previousImageUrl || found.imageUrl !== options.previousImageUrl;
-        if (!options.requireImage || (hasImage && imageChanged)) return found;
-      }
+      const found = (snapshot.products || []).map(normalizeProduct).find(item => item.id === productId);
+      if (found && (!requireImage || Boolean(found.imageUrl))) return found;
     } catch (error) {
       lastError = error;
     }
-    await new Promise(resolve => setTimeout(resolve, 1800));
   }
-  if (lastError) throw lastError;
-  throw new Error(options.requireImage
-    ? 'Das Bild wurde von Google Drive nicht bestätigt. Prüfe die Apps-Script-Berechtigung für Google Drive und veröffentliche die neue Backend-Version.'
-    : 'Die Speicherung wurde nicht bestätigt.');
+  if (requireImage) throw new Error('Das Produkt wurde nicht mit einer Bild-URL bestätigt. Prüfe die Drive-Berechtigung und die neue Apps-Script-Bereitstellung.');
+  throw lastError || new Error('Das Speichern wurde nicht rechtzeitig bestätigt.');
 }
 
 async function syncDriveImages() {
