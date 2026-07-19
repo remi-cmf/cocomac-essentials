@@ -347,3 +347,32 @@ textarea { resize: vertical; }
 .admin-module-panel{scroll-margin-top:18px}.admin-module-back{margin-bottom:18px}.admin-product-search{display:block;max-width:520px;margin:16px 0}
 .inventory-draft-status{min-height:24px;margin:8px 0 2px;color:#287153;font-weight:750}
 @media(max-width:700px){.admin-module-grid{grid-template-columns:1fr}.admin-module-button{grid-template-columns:52px minmax(0,1fr) auto;padding:15px;border-radius:19px}.admin-module-icon{width:52px;height:52px;border-radius:15px}.admin-module-back{width:100%}.inventory-toolbar{grid-template-columns:1fr!important}.inventory-toolbar button{width:100%}}
+
+
+/* Version 5.8.3 */
+.home-brand{display:block;padding:0;background:transparent;color:var(--ink);border:0;border-radius:0;text-align:left;cursor:pointer}
+.home-brand h1{margin:2px 0 0}.home-brand:active{opacity:.65}
+.qr-database-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:16px 0}
+.qr-filter{display:flex;justify-content:center;align-items:center;gap:7px;min-width:0}
+.qr-filter span{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:rgba(255,255,255,.22);font-size:.78rem}
+.qr-filter.ghost span{background:var(--paper)}
+.qr-database-search{margin-bottom:14px}
+.qr-database-row{grid-template-columns:58px minmax(0,1fr) auto}
+.qr-database-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#171716;color:#fff;font-weight:900}
+.qr-database-row b,.qr-database-row small{display:block;margin-top:5px;overflow-wrap:anywhere}
+.reservation-dialog{max-height:calc(100dvh - 18px);padding-bottom:max(18px,env(safe-area-inset-bottom))}
+.reservation-dialog form{padding-bottom:8px}
+.reservation-dialog #actionSubmitBtn{position:sticky;bottom:0;z-index:3;width:100%;box-shadow:0 -10px 24px var(--paper);margin-top:4px}
+.reservation-product-summary{min-width:0;max-width:100%;overflow:hidden}
+.reservation-product-summary>div:first-child{min-width:0;overflow-wrap:anywhere}
+.reservation-product-summary .reservation-free{flex:0 0 auto}
+@media(max-width:650px){
+  .qr-database-tabs{grid-template-columns:1fr}.qr-database-row{grid-template-columns:48px minmax(0,1fr)}
+  .qr-database-row .admin-row-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}
+  .form-grid.two-columns{grid-template-columns:minmax(0,1fr)!important}
+  .reservation-dialog{width:calc(100vw - 12px)!important;max-width:calc(100vw - 12px)!important;margin:auto;padding:16px;overflow-x:hidden}
+  .reservation-project-grid{grid-template-columns:minmax(0,1fr)!important}
+  .reservation-product-summary{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:10px!important;align-items:center}
+  .reservation-product-summary .reservation-free{max-width:135px;padding:13px 10px}
+  .reservation-product-summary .reservation-free b{font-size:1.35rem}
+}

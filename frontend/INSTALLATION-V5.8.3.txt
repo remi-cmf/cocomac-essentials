@@ -1,0 +1,8 @@
+COCOMAC ESSENTIAL – VERSION 5.8.3
+
+1. Alle Dateien dieses Ordners in das GitHub-Pages-Repository kopieren und vorhandene Dateien ersetzen.
+2. Änderungen committen und auf die Veröffentlichung warten.
+3. Die PWA auf dem iPhone vollständig schließen und neu öffnen.
+4. Falls weiterhin 5.8.2 angezeigt wird: Website-Daten bzw. PWA-Cache löschen und neu öffnen.
+
+Neu: vollständige QR-Code-Datenbank mit Filtern, Suche und Status; überarbeitete mobile Buchungs- und Defektfreigabe-Dialoge; Klick auf den Kopfbereich führt zurück zur Equipment-Startseite.

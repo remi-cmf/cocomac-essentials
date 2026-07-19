@@ -39,6 +39,7 @@ let qrCodes = [];
 let productQrScanReturnDialog = null;
 let inventoryCounts = {};
 let calculationDirty = false;
+let qrDatabaseFilter = 'all';
 
 
 const PRODUCT_CATEGORIES = Object.freeze([
@@ -519,6 +520,8 @@ function openAction(id, action) {
   projectSelect.innerHTML = '<option value="">Projekt auswählen</option>' + selectableProjects.map(p =>
     `<option value="${escapeHtml(p.id)}">${escapeHtml(projectOptionLabel(p))}</option>`
   ).join('');
+  if (selectableProjects.length === 1) projectSelect.value = selectableProjects[0].id;
+  $('#actionSubmitBtn').textContent = action === 'release' ? 'Defekten Bestand freigeben' : action === 'return' ? 'Rückgabe speichern' : 'Speichern';
 
   $('#actionHelp').innerHTML = action === 'checkout'
     ? 'Wähle das Projekt. Der Projektzeitraum wird vorgeschlagen und kann direkt angepasst werden.'
@@ -1125,6 +1128,9 @@ function saveInventoryDraftManually() {
 function bind() {
   $('#search').oninput = render;
   $$('.menu-nav').forEach(button => button.onclick = () => { if (button.dataset.page === 'adminPage') openAdministration(); else { showPage(button.dataset.page); closeMainMenu(); } });
+  $('#homeBrandBtn').onclick = resetToHome;
+  $$('.qr-filter').forEach(button => button.onclick = () => { qrDatabaseFilter = button.dataset.qrFilter || 'all'; $$('.qr-filter').forEach(item => { item.classList.toggle('active', item === button); item.classList.toggle('ghost', item !== button); }); renderQrDatabase(); });
+  $('#qrDatabaseSearch').oninput = renderQrDatabase;
   $('#menuBtn').onclick = toggleMainMenu;
   $('#menuSettingsBtn').onclick = () => { closeMainMenu(); openSettingsDialog(); };
   $('#adminLoginForm').onsubmit = submitAdminLogin;
@@ -1444,6 +1450,20 @@ async function deleteProject(projectId) {
     await refreshCatalog(); render(); showPage('adminPage'); renderAdminProjects(); toast('Projekt gelöscht.');
   } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
 }
+function resetToHome() {
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+  closeMainMenu();
+  activeProjectId = null;
+  activeReservationId = null;
+  activeCalculation = null;
+  const search = $('#search');
+  if (search) search.value = '';
+  try { history.replaceState({}, '', location.pathname); } catch (_) {}
+  showPage('equipmentPage');
+  render();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
 function showPage(pageId) {
   $$('.app-page').forEach(page => page.classList.toggle('hidden', page.id !== pageId));
   $$('.menu-nav').forEach(btn => btn.classList.toggle('active', btn.dataset.page === pageId));
@@ -1862,7 +1882,7 @@ function openProductQrScanner() {
 }
 
 async function loadQrCodes() {
-  const result = await sendCloudJsonpAction('listQrCodes', adminPayload({ limit: 250 }));
+  const result = await sendCloudJsonpAction('listQrCodes', adminPayload({ limit: 100000 }));
   qrCodes = Array.isArray(result?.qrCodes) ? result.qrCodes : [];
   renderQrDatabase();
   return qrCodes;
@@ -1874,11 +1894,27 @@ function renderQrDatabase() {
   if (!summary || !wrap) return;
   const free = qrCodes.filter(code => code.status === 'frei');
   const assigned = qrCodes.filter(code => code.status === 'zugeordnet');
-  summary.textContent = `${qrCodes.length} zuletzt geladene Codes: ${free.length} frei, ${assigned.length} zugeordnet. Die Datenbank kann jederzeit weiter hochgezählt werden.`;
-  wrap.innerHTML = qrCodes.slice(0, 100).map(code => `<div class="admin-product-row"><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${escapeHtml(code.status)}${code.productId ? ` · ${escapeHtml(code.productId)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button></div></div>`).join('') || '<p>Noch keine QR-Codes erzeugt.</p>';
+  const search = String($('#qrDatabaseSearch')?.value || '').trim().toLowerCase();
+  const productById = new Map(catalog.map(item => [String(item.id), item]));
+  const filtered = qrCodes.filter(code => {
+    if (qrDatabaseFilter !== 'all' && code.status !== qrDatabaseFilter) return false;
+    const product = productById.get(String(code.productId || ''));
+    const haystack = [code.qrCode, code.productId, product?.name, product?.category].filter(Boolean).join(' ').toLowerCase();
+    return !search || haystack.includes(search);
+  });
+  $('#qrAllCount').textContent = String(qrCodes.length);
+  $('#qrAssignedCount').textContent = String(assigned.length);
+  $('#qrFreeCount').textContent = String(free.length);
+  summary.innerHTML = `<b>${qrCodes.length} QR-Codes insgesamt</b><br>${assigned.length} aktiv vergeben · ${free.length} bereits erzeugt und noch frei. Permanente QR-Codes bleiben auch bei einer Änderung der internen Artikelnummer mit dem Produkt verbunden.`;
+  wrap.innerHTML = filtered.map(code => {
+    const product = productById.get(String(code.productId || ''));
+    const assignedText = product ? `${product.name} · ${code.productId}` : (code.productId || 'Noch keinem Produkt zugeordnet');
+    const dateText = code.status === 'zugeordnet' && code.assignedAt ? `Zugeordnet: ${formatDate(code.assignedAt)}` : code.createdAt ? `Erzeugt: ${formatDate(code.createdAt)}` : '';
+    return `<div class="admin-product-row qr-database-row"><div class="qr-database-icon">QR</div><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><b>${escapeHtml(assignedText)}</b><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${code.status === 'frei' ? 'Neu / frei' : 'Aktiv vergeben'}${dateText ? ` · ${escapeHtml(dateText)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button>${code.productId ? `<button type="button" class="ghost" data-open-qr-product="${escapeHtml(code.productId)}">Produkt öffnen</button>` : ''}</div></div>`;
+  }).join('') || '<div class="empty-state">Für diesen Filter wurden keine QR-Codes gefunden.</div>';
   $$('[data-copy-qr]').forEach(button => button.onclick = async () => { await navigator.clipboard.writeText(button.dataset.copyQr); toast('QR-Code kopiert.'); });
+  $$('[data-open-qr-product]').forEach(button => button.onclick = () => openProductDialog(button.dataset.openQrProduct));
 }
-
 async function generateQrBatch() {
   if (!(await ensureAdminAccess())) return;
   const count = Math.max(1, Math.min(1000, Math.round(Number($('#qrBatchCount').value || 100))));

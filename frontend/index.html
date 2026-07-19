@@ -13,15 +13,15 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=581">
+  <link rel="stylesheet" href="./styles.css?v=583">
 </head>
 
 <body>
   <header class="topbar">
-    <div>
+    <button id="homeBrandBtn" class="home-brand" type="button" aria-label="Zur Equipment-Hauptseite">
       <small>COCOMAC ESSENTIAL</small>
       <h1>Equipment</h1>
-    </div>
+    </button>
 
     <div class="topbar-actions">
       <button id="installBtn" class="ghost hidden">Installieren</button>
@@ -133,6 +133,12 @@
           <button id="downloadQrCsvBtn" type="button" class="ghost">Freie Codes als CSV</button>
         </div>
         <div id="qrDatabaseSummary" class="admin-intro">QR-Code-Datenbank wird geladen …</div>
+        <div class="qr-database-tabs" role="tablist" aria-label="QR-Code-Status">
+          <button type="button" class="qr-filter active" data-qr-filter="all">Alle Codes <span id="qrAllCount">0</span></button>
+          <button type="button" class="qr-filter ghost" data-qr-filter="zugeordnet">Vergebene <span id="qrAssignedCount">0</span></button>
+          <button type="button" class="qr-filter ghost" data-qr-filter="frei">Neue / freie <span id="qrFreeCount">0</span></button>
+        </div>
+        <label class="qr-database-search">QR-Code durchsuchen<input id="qrDatabaseSearch" type="search" placeholder="QR-Code, Produkt-ID oder Produktname"></label>
         <div id="qrCodeList" class="admin-product-list"></div>
       </section>
       <section id="productsModule" class="admin-section admin-module-panel hidden">
