@@ -1,0 +1,1 @@
+Version 5.4.6: bestätigter, stückweiser Foto-Upload für Safari/iPhone. Jeder Block wird vom Apps-Script quittiert; die Bild-URL wird direkt zurückgegeben.

@@ -758,7 +758,7 @@ async function handleImageFile(file) {
   if (file.size > 10 * 1024 * 1024) return toast('Das Foto darf höchstens 10 MB groß sein.');
 
   try {
-    selectedProductImage = await compressImage(file, 900, 0.65);
+    selectedProductImage = await compressImage(file, 720, 0.58);
     if ($('#productDriveImage')) $('#productDriveImage').value = '';
     $('#productImagePreview').innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)} · bereit zum Hochladen</span>`;
     const status = $('#productSaveStatus');
@@ -842,10 +842,19 @@ async function submitProduct(event) {
     if (selectedProductImage?.dataUrl) {
       button.textContent = 'Foto wird hochgeladen …';
       status.textContent = 'Das Foto wird verkleinert in Google Drive gespeichert. Bitte die App geöffnet lassen …';
-      await sendCloudAction({ action: 'uploadProductImage', payload: adminPayload({
-        productId: id, category, imageBase64: selectedProductImage.dataUrl, imageName: `${id}.jpg`
-      })});
-      savedProduct = await waitForSavedProduct(id, { requireImage: true, timeoutMs: 75000 });
+      const uploadResult = await uploadProductImageConfirmed({
+        productId: id,
+        category,
+        imageBase64: selectedProductImage.dataUrl,
+        imageName: `${id}.jpg`
+      }, (done, total) => {
+        const percent = Math.max(1, Math.round((done / total) * 100));
+        status.textContent = `Foto wird übertragen … ${percent} %`;
+      });
+      if (!uploadResult?.imageUrl) throw new Error('Das Backend hat keine Bild-URL zurückgegeben.');
+      savedProduct = normalizeProduct({ ...savedProduct, imageUrl: uploadResult.imageUrl });
+      const confirmed = await waitForSavedProduct(id, { requireImage: true, timeoutMs: 30000 });
+      savedProduct = confirmed;
     }
 
     const pos = catalog.findIndex(item => item.id === savedProduct.id);
@@ -908,6 +917,41 @@ function cleanApiUrl(value) {
   return cleaned;
 }
 
+async function uploadProductImageConfirmed(payload, onProgress = () => {}) {
+  const dataUrl = String(payload.imageBase64 || '');
+  if (!dataUrl.startsWith('data:image/')) throw new Error('Das ausgewählte Foto konnte nicht verarbeitet werden.');
+
+  // JSONP is used deliberately here. Unlike a no-cors POST, every chunk is
+  // acknowledged by Apps Script and Safari cannot silently swallow an error.
+  const uploadId = `IMG_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const chunkSize = 4800;
+  const chunks = [];
+  for (let index = 0; index < dataUrl.length; index += chunkSize) {
+    chunks.push(dataUrl.slice(index, index + chunkSize));
+  }
+  if (!chunks.length) throw new Error('Das Foto enthält keine Daten.');
+  if (chunks.length > 120) throw new Error('Das Foto ist trotz Verkleinerung zu groß. Bitte ein anderes Foto auswählen.');
+
+  const basePayload = adminPayload({
+    uploadId,
+    productId: payload.productId,
+    category: payload.category || '',
+    imageName: payload.imageName || `${payload.productId}.jpg`,
+    totalChunks: chunks.length
+  });
+
+  await sendCloudJsonpAction('beginImageUpload', basePayload);
+  for (let index = 0; index < chunks.length; index += 1) {
+    await sendCloudJsonpAction('uploadImageChunk', {
+      ...basePayload,
+      chunkIndex: index,
+      chunk: chunks[index]
+    }, 30000);
+    onProgress(index + 1, chunks.length);
+  }
+  return sendCloudJsonpAction('finishImageUpload', basePayload, 60000);
+}
+
 async function sendCloudAction(data) {
   const apiUrl = cleanApiUrl(settings().apiUrl);
   await fetch(apiUrl, {
@@ -939,12 +983,12 @@ function loadCloudSnapshot(apiUrl) {
   });
 }
 
-function sendCloudJsonpAction(action, payload = {}) {
+function sendCloudJsonpAction(action, payload = {}, timeoutMs = 20000) {
   const url = cleanApiUrl(settings().apiUrl);
   return new Promise((resolve, reject) => {
     const callbackName = `cocomacWrite_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement('script');
-    const timeout = setTimeout(() => cleanup(new Error('Zeitüberschreitung beim Speichern.')), 20000);
+    const timeout = setTimeout(() => cleanup(new Error('Zeitüberschreitung beim Speichern.')), timeoutMs);
     function cleanup(error, data) {
       clearTimeout(timeout); delete window[callbackName]; script.remove();
       error ? reject(error) : resolve(data);
