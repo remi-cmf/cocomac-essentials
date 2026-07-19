@@ -185,3 +185,19 @@ textarea { resize: vertical; }
 .admin-project-icon{display:grid;place-items:center;width:64px;height:64px;border-radius:16px;background:#171716;color:#fff;font-weight:900;letter-spacing:.08em}
 .admin-project-row{grid-template-columns:72px minmax(0,1fr) auto}
 @media(max-width:700px){.admin-project-row{grid-template-columns:54px minmax(0,1fr)}.admin-project-icon{width:48px;height:48px;border-radius:12px;font-size:.78rem}.admin-project-row .admin-row-actions{grid-column:1/-1;justify-content:stretch}.admin-project-row .admin-row-actions button{flex:1}}
+
+/* Version 5.2: Projektkalkulation */
+.calculation-dialog{width:min(1080px,calc(100vw - 24px));max-width:1080px}
+.calculation-rows{display:grid;gap:12px;margin:20px 0}
+.calculation-row{display:grid;grid-template-columns:minmax(220px,2fr) repeat(4,minmax(100px,1fr));gap:10px;align-items:end;padding:14px;border:1px solid var(--line,#ddd);border-radius:16px;background:#fff}
+.calculation-row .product-cell{align-self:center}
+.calculation-row label{min-width:0}
+.calculation-row input{width:100%;min-width:0}
+.calculation-total{display:flex;justify-content:space-between;gap:20px;align-items:center;font-size:1.2rem;padding:18px 0;border-top:2px solid #171716}
+.checkbox-line{display:flex!important;align-items:center;gap:10px}
+.checkbox-line input{width:auto!important}
+@media(max-width:760px){
+  .calculation-row{grid-template-columns:1fr 1fr}
+  .calculation-row .product-cell{grid-column:1/-1}
+  .calculation-dialog form,.calculation-dialog{max-width:100%;overflow-x:hidden}
+}

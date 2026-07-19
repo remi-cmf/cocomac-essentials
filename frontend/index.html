@@ -443,6 +443,41 @@
     </form>
   </dialog>
 
+
+  <!-- Projektkalkulation und Versand -->
+  <dialog id="projectCalculationDialog" class="wide-dialog calculation-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="projectCalculationForm">
+      <input id="calculationProjectId" type="hidden">
+      <small>COCOMAC ESSENTIAL</small>
+      <h2>Projektkalkulation</h2>
+      <p class="dialog-intro">Passe Preise und Sonderkonditionen nur für dieses Projekt an. Die Stammpreise des Equipments bleiben unverändert.</p>
+      <div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <div id="calculationRows" class="calculation-rows"></div>
+      <div class="form-columns">
+        <label>Gesamtrabatt in %<input id="calculationDiscount" type="number" min="0" max="100" step="0.01" value="0"></label>
+        <label>Zusätzliche Kosten<input id="calculationExtraCost" type="number" min="0" step="0.01" value="0"></label>
+        <label>Bezeichnung Zusatzkosten<input id="calculationExtraLabel" placeholder="z. B. Transport"></label>
+        <label>Preisanzeige<select id="calculationTaxMode"><option value="net">Netto</option><option value="gross">Brutto inkl. 19 % MwSt.</option></select></label>
+      </div>
+      <label>Hinweis auf dem Beleg<textarea id="calculationNote" placeholder="z. B. Sonderkonditionen für Nachwuchsprojekt"></textarea></label>
+      <div class="calculation-total"><span>Aktuelle Gesamtsumme</span><b id="calculationGrandTotal">0,00 €</b></div>
+      <hr>
+      <h3>E-Mail-Versand</h3>
+      <div class="form-columns">
+        <label>Empfänger<input id="calculationEmailTo" type="text" placeholder="name@example.com"></label>
+        <label>CC<input id="calculationEmailCc" type="text" placeholder="optional"></label>
+        <label>Betreff<input id="calculationEmailSubject" type="text"></label>
+      </div>
+      <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
+      <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
+      <div class="project-actions">
+        <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
+        <button id="calculationEmailBtn" type="button" class="ghost">PDF per E-Mail senden</button>
+      </div>
+    </form>
+  </dialog>
+
   <div
     id="toast"
     class="toast hidden">
@@ -450,6 +485,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=22" type="module"></script>
+  <script src="./app.js?v=23" type="module"></script>
 </body>
 </html>
