@@ -376,3 +376,5 @@ textarea { resize: vertical; }
   .reservation-product-summary .reservation-free{max-width:135px;padding:13px 10px}
   .reservation-product-summary .reservation-free b{font-size:1.35rem}
 }
+
+.home-brand:disabled{cursor:wait;opacity:.65}.home-brand.is-restarting h1::after{content:' ↻';display:inline-block;animation:cocomac-spin .8s linear infinite}@keyframes cocomac-spin{to{transform:rotate(360deg)}}

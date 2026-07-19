@@ -991,15 +991,8 @@ async function uploadProductImageConfirmed(payload, onProgress = () => {}) {
 }
 
 async function sendCloudAction(data) {
-  const apiUrl = cleanApiUrl(settings().apiUrl);
-  await fetch(apiUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(data)
-  });
-  return true;
+  if (!data || !data.action) throw new Error('Cloud-Aktion fehlt.');
+  return sendCloudJsonpAction(data.action, data.payload || {}, 30000);
 }
 
 function loadCloudSnapshot(apiUrl) {
@@ -1450,7 +1443,8 @@ async function deleteProject(projectId) {
     await refreshCatalog(); render(); showPage('adminPage'); renderAdminProjects(); toast('Projekt gelöscht.');
   } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
 }
-function resetToHome() {
+async function resetToHome() {
+  const button = $('#homeBrandBtn');
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   closeMainMenu();
   activeProjectId = null;
@@ -1460,8 +1454,26 @@ function resetToHome() {
   if (search) search.value = '';
   try { history.replaceState({}, '', location.pathname); } catch (_) {}
   showPage('equipmentPage');
-  render();
   window.scrollTo({top:0, behavior:'smooth'});
+
+  if (button) {
+    button.disabled = true;
+    button.classList.add('is-restarting');
+  }
+  const banner = $('#syncBanner');
+  if (banner) banner.textContent = 'Daten werden neu geladen …';
+  try {
+    await syncFromCloud({ showMessage: false, force: true });
+    toast('Cocomac Essential wurde neu geladen.');
+  } catch (error) {
+    render();
+    toast('Neustart fehlgeschlagen: ' + error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('is-restarting');
+    }
+  }
 }
 
 function showPage(pageId) {
