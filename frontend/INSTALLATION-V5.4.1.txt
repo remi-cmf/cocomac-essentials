@@ -1,0 +1,8 @@
+COCOMAC ESSENTIALS – VERSION 5.4.1
+
+1. Den Inhalt dieses Ordners vollständig in das GitHub-Repository hochladen.
+2. Bestehende Dateien ersetzen.
+3. GitHub Pages abwarten und danach mit Cmd + Shift + R neu laden.
+4. Auf iPhone/iPad die App vollständig schließen und erneut öffnen.
+
+Neu: sichtbare QR-Code-Vorschau, PNG-Download, A4-Druckbogen und bestätigter Bild-Upload in den fest hinterlegten Google-Drive-Ordner.

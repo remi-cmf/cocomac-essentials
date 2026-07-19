@@ -833,9 +833,13 @@ async function submitProduct(event) {
   try {
     const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
     if (selectedProductImage?.dataUrl) {
+      toast('Bild wird in Google Drive hochgeladen …');
       await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
-      // Bild-Uploads laufen technisch ohne direkte Browserantwort. Ein späterer Hintergrundabgleich übernimmt die endgültige URL.
-      setTimeout(() => syncFromCloud({force:true}), 1500);
+      const saved = await waitForSavedProductImage(product.id, 35000);
+      const savedIndex = catalog.findIndex(item => item.id === saved.id);
+      if (savedIndex >= 0) catalog[savedIndex] = saved;
+      render();
+      toast('Produkt und Bild wurden gespeichert.');
     } else {
       const response = await sendCloudJsonpAction('addProduct', adminPayload(payload));
       if (response?.product) {
@@ -865,6 +869,20 @@ async function syncDriveImages() {
   } finally {
     if (button) { button.disabled = false; button.textContent = 'Bilder aus Drive zuordnen'; }
   }
+}
+
+async function waitForSavedProductImage(productId, timeoutMs = 35000) {
+  const started = Date.now();
+  let lastError = null;
+  while (Date.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 1800));
+    try {
+      const result = await sendCloudJsonpAction('listProducts', {});
+      const raw = Array.isArray(result?.products) ? result.products.find(item => String(item.id) === String(productId)) : null;
+      if (raw?.imageUrl) return normalizeProduct(raw);
+    } catch (error) { lastError = error; }
+  }
+  throw new Error(lastError?.message || 'Der Bild-Upload wurde nicht bestätigt. Bitte prüfe die Drive-Berechtigung und versuche es erneut.');
 }
 
 function cleanApiUrl(value) {
@@ -999,6 +1017,7 @@ function bind() {
   $('#scanProductQrBtn').onclick = openProductQrScanner;
   $('#generateQrBatchBtn').onclick = generateQrBatch;
   $('#downloadQrCsvBtn').onclick = downloadFreeQrCsv;
+  $('#printQrSheetBtn').onclick = printFreeQrSheet;
   $('#projectForm').onsubmit = submitProject;
   $('#calculationPreviewBtn').onclick = previewProjectCalculation;
   $('#calculationEmailBtn').onclick = emailProjectCalculation;
@@ -1697,9 +1716,79 @@ function renderQrDatabase() {
   if (!summary || !wrap) return;
   const free = qrCodes.filter(code => code.status === 'frei');
   const assigned = qrCodes.filter(code => code.status === 'zugeordnet');
-  summary.textContent = `${qrCodes.length} zuletzt geladene Codes: ${free.length} frei, ${assigned.length} zugeordnet. Die Datenbank kann jederzeit weiter hochgezählt werden.`;
-  wrap.innerHTML = qrCodes.slice(0, 100).map(code => `<div class="admin-product-row"><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${escapeHtml(code.status)}${code.productId ? ` · ${escapeHtml(code.productId)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button></div></div>`).join('') || '<p>Noch keine QR-Codes erzeugt.</p>';
+  summary.textContent = `${qrCodes.length} zuletzt geladene Codes: ${free.length} frei, ${assigned.length} zugeordnet. Jeder Code kann als PNG gespeichert oder auf einem Druckbogen ausgegeben werden.`;
+  const visible = qrCodes.slice(0, 100);
+  wrap.innerHTML = visible.map((code, index) => `<div class="qr-admin-card">
+    <div class="qr-admin-preview" id="qrAdminPreview${index}" aria-label="QR-Code ${escapeHtml(code.qrCode)}"></div>
+    <div class="qr-admin-info"><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${escapeHtml(code.status)}${code.productId ? ` · ${escapeHtml(code.productId)}` : ''}</small></div>
+    <div class="admin-row-actions"><button type="button" class="ghost" data-download-qr="${escapeHtml(code.qrCode)}" data-qr-index="${index}">PNG</button><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button></div>
+  </div>`).join('') || '<p>Noch keine QR-Codes erzeugt.</p>';
+  visible.forEach((code, index) => renderQrIntoElement(document.getElementById(`qrAdminPreview${index}`), qrPayload(code.qrCode), 112));
   $$('[data-copy-qr]').forEach(button => button.onclick = async () => { await navigator.clipboard.writeText(button.dataset.copyQr); toast('QR-Code kopiert.'); });
+  $$('[data-download-qr]').forEach(button => button.onclick = () => downloadQrPng(button.dataset.downloadQr, Number(button.dataset.qrIndex)));
+}
+
+function qrPayload(qrCode) {
+  return `${PRODUCT_URL_BASE}?qr=${encodeURIComponent(qrCode)}`;
+}
+
+function renderQrIntoElement(element, text, size = 160) {
+  if (!element || typeof window.QRCode === 'undefined') return;
+  element.innerHTML = '';
+  new window.QRCode(element, { text, width: size, height: size, correctLevel: window.QRCode.CorrectLevel.M });
+}
+
+function qrElementDataUrl(element) {
+  const canvas = element?.querySelector('canvas');
+  if (canvas) return canvas.toDataURL('image/png');
+  return element?.querySelector('img')?.src || '';
+}
+
+function downloadQrPng(qrCode, index) {
+  const element = document.getElementById(`qrAdminPreview${index}`);
+  const dataUrl = qrElementDataUrl(element);
+  if (!dataUrl) return toast('QR-Code-Bild konnte nicht erstellt werden.');
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `${qrCode}.png`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function makeQrDataUrl(text, size = 300) {
+  const host = document.createElement('div');
+  host.style.position = 'fixed'; host.style.left = '-10000px'; host.style.top = '0';
+  document.body.appendChild(host);
+  renderQrIntoElement(host, text, size);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const dataUrl = qrElementDataUrl(host);
+  host.remove();
+  return dataUrl;
+}
+
+async function printFreeQrSheet() {
+  if (!(await ensureAdminAccess())) return;
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return toast('Bitte Pop-ups erlauben, damit der QR-Druckbogen geöffnet werden kann.');
+  printWindow.document.write('<p style="font-family:Arial;padding:24px">QR-Druckbogen wird erstellt …</p>');
+  try {
+    const requested = Math.max(1, Math.min(500, Math.round(Number($('#qrBatchCount').value || 100))));
+    const result = await sendCloudJsonpAction('listQrCodes', adminPayload({ status: 'frei', limit: requested }));
+    const codes = Array.isArray(result?.qrCodes) ? result.qrCodes.slice(0, requested) : [];
+    if (!codes.length) throw new Error('Es sind keine freien QR-Codes vorhanden.');
+    const labels = [];
+    for (const code of codes) {
+      const image = await makeQrDataUrl(qrPayload(code.qrCode), 260);
+      labels.push(`<div class="label"><img src="${image}" alt="${escapeHtml(code.qrCode)}"><strong>${escapeHtml(code.qrCode)}</strong></div>`);
+    }
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Cocomac QR-Codes</title><style>@page{size:A4;margin:8mm}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.label{height:31mm;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2mm;break-inside:avoid}.label img{width:22mm;height:22mm;image-rendering:pixelated}.label strong{font-size:8pt;margin-top:1mm;letter-spacing:.2px}@media print{.label{border-color:#ddd}}</style></head><body><div class="sheet">${labels.join('')}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    printWindow.document.close();
+  } catch (error) {
+    printWindow.close();
+    toast('QR-Druckbogen konnte nicht erstellt werden: ' + error.message);
+  }
 }
 
 async function generateQrBatch() {
