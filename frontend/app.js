@@ -778,6 +778,17 @@ function compressImage(file, maxSize, quality) {
 
 async function submitProduct(event) {
   event.preventDefault();
+
+  if (!settings().cloudMode) {
+    toast('Speichern ist nur mit aktiver Google-Sheets-Verbindung möglich.');
+    return;
+  }
+
+  if (!(await ensureAdminAccess())) {
+    toast('Bitte zuerst als Administrator anmelden und anschließend erneut auf Speichern tippen.');
+    return;
+  }
+
   const editId = $('#productEditId').value;
   const existing = catalog.find(item => item.id === editId);
   const category = $('#productCategory').value.trim();
@@ -801,9 +812,31 @@ async function submitProduct(event) {
   saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
   try {
     const payload = {...product, imageBase64: selectedProductImage?.dataUrl || '', imageName: `${id}.jpg`};
-    if (selectedProductImage?.dataUrl) await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
-    else await sendCloudJsonpAction('addProduct', adminPayload(payload));
-    await syncFromCloud({force:true});
+    if (selectedProductImage?.dataUrl) {
+      await sendCloudAction({action:'addProduct', payload: adminPayload(payload)});
+    } else {
+      await sendCloudJsonpAction('addProduct', adminPayload(payload));
+    }
+
+    // Apps Script kann bei Bild-Uploads wegen no-cors keine direkte Antwort liefern.
+    // Deshalb prüfen wir danach ausdrücklich, ob das Produkt wirklich gespeichert wurde.
+    let savedProduct = null;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 700 : 1200));
+      await syncFromCloud({force:true});
+      savedProduct = catalog.find(item => item.id === product.id);
+      const matches = savedProduct
+        && savedProduct.name === product.name
+        && Number(savedProduct.total) === Number(product.total)
+        && Number(savedProduct.dailyPrice || 0) === Number(product.dailyPrice || 0);
+      if (matches) break;
+      savedProduct = null;
+    }
+
+    if (!savedProduct) {
+      throw new Error('Die Änderung wurde nicht in Google Sheets bestätigt. Bitte die Admin-Anmeldung und die aktuelle Apps-Script-Bereitstellung prüfen.');
+    }
+
     $('#productDialog').close();
     toast(existing ? 'Produkt wurde aktualisiert.' : `${product.id} wurde angelegt.`);
     openDetail(product.id);
@@ -1465,9 +1498,11 @@ function updateReservationAvailability() {
 
 async function submitReservation(event) {
   event.preventDefault();
+  const button = $('#reservationSubmitBtn');
+  const originalText = button?.textContent || 'Equipment hinzufügen';
   const editId = $('#reservationEditId').value;
   const r = normalizeReservation({
-    id: editId || crypto.randomUUID(),
+    id: editId || (crypto.randomUUID ? crypto.randomUUID() : `RES-${Date.now()}-${Math.random().toString(36).slice(2,8)}`),
     projectId: $('#reservationProject').value,
     productId: $('#reservationProduct').value,
     quantity: Number($('#reservationQuantity').value),
@@ -1476,22 +1511,54 @@ async function submitReservation(event) {
     status: $('#reservationStatus').value,
     note: $('#reservationNote').value.trim()
   });
-  if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) return toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
-  if (r.to < r.from) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
-  const available = availableFor(r.productId, r.from, r.to, r.id);
-  if (r.quantity > available) return toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
-  if (settings().cloudMode) await sendCloudJsonpAction('saveReservation',r);
-  await refreshCatalog();
-  render();
-  $('#reservationDialog').close();
 
-  if (reservationOrigin === 'project') {
-    $('#projectDetailDialog').close();
-    openProjectDetail(r.projectId);
-  } else {
-    openDetail(r.productId);
+  if (!r.projectId || !r.productId || !r.from || !r.to || r.quantity < 1) {
+    toast('Bitte Projekt, Produkt, Menge und Zeitraum ausfüllen.');
+    return;
   }
-  toast(editId ? 'Equipment-Buchung wurde aktualisiert.' : 'Equipment wurde dem Projekt zugeordnet.');
+  if (r.to < r.from) {
+    toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
+    return;
+  }
+  const available = availableFor(r.productId, r.from, r.to, r.id);
+  if (r.quantity > available) {
+    toast(`Nur ${available} Stück sind in diesem Zeitraum verfügbar.`);
+    return;
+  }
+
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = editId ? 'Änderungen werden gespeichert …' : 'Equipment wird hinzugefügt …';
+    }
+
+    if (!settings().cloudMode) throw new Error('Die Cloud-Verbindung ist nicht aktiv. Bitte unter „Verbindung“ prüfen.');
+    const response = await sendCloudJsonpAction('saveReservation', r);
+    if (!response || response.ok === false) throw new Error(response?.error || 'Die Buchung wurde vom Backend nicht bestätigt.');
+
+    await refreshCatalog();
+    const saved = reservations.find(item => String(item.id) === String(r.id));
+    if (!saved) throw new Error('Die Buchung wurde nicht im Tabellenblatt „Reservierungen“ gefunden. Bitte die Apps-Script-Bereitstellung aktualisieren.');
+
+    render();
+    $('#reservationDialog').close();
+    if (reservationOrigin === 'project') {
+      $('#projectDetailDialog').close();
+      openProjectDetail(r.projectId);
+    } else {
+      openDetail(r.productId);
+    }
+    toast(editId ? 'Equipment-Buchung wurde aktualisiert.' : 'Equipment wurde dem Projekt zugeordnet.');
+  } catch (error) {
+    console.error('Reservierung konnte nicht gespeichert werden:', error);
+    toast(error?.message || 'Die Buchung konnte nicht gespeichert werden.');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+      updateReservationAvailability();
+    }
+  }
 }
 
 
@@ -1549,6 +1616,10 @@ function renderAdminProducts() {
 }
 
 async function deleteProduct(productId) {
+  if (!(await ensureAdminAccess())) {
+    toast('Bitte zuerst als Administrator anmelden.');
+    return;
+  }
   const product = catalog.find(item => item.id === productId);
   if (!product) return;
   const linked = reservations.filter(item => item.productId === productId && !['Storniert','Zurückgegeben'].includes(item.status));
