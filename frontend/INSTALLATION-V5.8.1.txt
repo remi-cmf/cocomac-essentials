@@ -1,0 +1,10 @@
+COCOMAC ESSENTIAL – VERSION 5.8.1
+
+Änderungen:
+- Inventur & Scanner liegt jetzt innerhalb der passwortgeschützten Administration.
+- Bei einem Kategorienwechsel erhält das Produkt automatisch eine neue interne Artikel-ID.
+- Der vorhandene permanente QR-Code bleibt erhalten und wird im Hintergrund auf die neue Artikel-ID umgehängt.
+- Verknüpfte Reservierungen, Buchungen und Schäden werden automatisch aktualisiert.
+- Produktbilder erhalten beim Verkleinern und in den Verwaltungslisten einen weißen Hintergrund.
+
+Frontend vollständig in GitHub ersetzen. Danach Browser/PWA einmal vollständig schließen und neu öffnen.

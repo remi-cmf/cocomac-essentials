@@ -804,6 +804,8 @@ async function compressImageFile(file, maxSize = 720, quality = 0.58) {
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
   const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   if (bitmap.close) bitmap.close();
   const dataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -822,6 +824,7 @@ async function submitProduct(event) {
   const raw = {
     ...existing,
     id: existing?.id || '',
+    originalId: existing?.id || '',
     name: $('#productName').value.trim(), category,
     location: $('#productLocation').value.trim(), total: Number($('#productTotal').value),
     condition: $('#productCondition').value, description: $('#productDescription').value.trim(),
@@ -856,6 +859,7 @@ async function submitProduct(event) {
     status.textContent = 'Produktdaten werden gespeichert …';
     const metaResponse = await sendCloudJsonpAction('addProduct', adminPayload({ ...product, imageBase64: '' }));
     let savedProduct = metaResponse?.product ? normalizeProduct(metaResponse.product) : await waitForSavedProduct(id, { timeoutMs: 20000 });
+    id = savedProduct.id || id;
 
     if (selectedProductImage?.file || selectedProductImage?.dataUrl) {
       button.textContent = 'Foto wird verarbeitet …';
@@ -880,6 +884,14 @@ async function submitProduct(event) {
       savedProduct = confirmed;
     }
 
+    if (editId && editId !== savedProduct.id) {
+      catalog = catalog.filter(item => item.id !== editId);
+      if (Object.prototype.hasOwnProperty.call(inventoryCounts, editId)) {
+        inventoryCounts[savedProduct.id] = inventoryCounts[editId];
+        delete inventoryCounts[editId];
+        persistInventoryDraft();
+      }
+    }
     const pos = catalog.findIndex(item => item.id === savedProduct.id);
     if (pos >= 0) catalog[pos] = savedProduct; else catalog.unshift(savedProduct);
     selectedProductImage = null;
@@ -1059,6 +1071,8 @@ async function openAdministration() {
   showPage('adminPage');
   renderAdminProjects();
   renderAdminProducts();
+  loadInventoryDraft();
+  renderInventory();
   loadQrCodes().catch(error => toast('QR-Code-Datenbank konnte nicht geladen werden: ' + error.message));
 }
 async function submitAdminLogin(event) {
@@ -1076,6 +1090,8 @@ async function submitAdminLogin(event) {
     showPage('adminPage');
     renderAdminProjects();
     renderAdminProducts();
+    loadInventoryDraft();
+    renderInventory();
     toast('Administration entsperrt.');
   } catch (error) {
     $('#adminLoginError').textContent = error.message || 'Anmeldung fehlgeschlagen.';
@@ -1404,7 +1420,7 @@ async function deleteProject(projectId) {
 function showPage(pageId) {
   $$('.app-page').forEach(page => page.classList.toggle('hidden', page.id !== pageId));
   $$('.menu-nav').forEach(btn => btn.classList.toggle('active', btn.dataset.page === pageId));
-  const titles = {equipmentPage:'Equipment',projectsPage:'Projekte',calendarPage:'Kalender',inventoryPage:'Inventur & Scanner',adminPage:'Administration'};
+  const titles = {equipmentPage:'Equipment',projectsPage:'Projekte',calendarPage:'Kalender',inventoryPage:'Administration',adminPage:'Administration'};
   const title = titles[pageId] || 'Equipment';
   const heading = document.querySelector('.topbar h1');
   if (heading) heading.textContent = title;
@@ -1997,12 +2013,13 @@ function renderInventory() {
 }
 
 async function saveInventory() {
-  const payload = {
+  if (!(await ensureAdminAccess())) return toast('Bitte zuerst als Administrator anmelden.');
+  const payload = adminPayload({
     id: `INV-${Date.now()}`,
     date: $('#inventoryDate').value || todayIso(),
     name: $('#inventoryName').value.trim() || `Inventur ${formatDate(todayIso())}`,
     items: catalog.map(item=>({productId:item.id, expected:Number(item.total||0), counted:Number(inventoryCounts[item.id]||0)}))
-  };
+  });
   const button=$('#inventorySaveBtn'); button.disabled=true; button.textContent='Wird gespeichert …';
   try {
     if (settings().cloudMode) await sendCloudJsonpAction('saveInventory', payload, 30000);

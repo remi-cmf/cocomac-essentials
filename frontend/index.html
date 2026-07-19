@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=580">
+  <link rel="stylesheet" href="./styles.css?v=581">
 </head>
 
 <body>
@@ -30,7 +30,6 @@
         <button type="button" class="menu-nav active" data-page="equipmentPage">Equipment</button>
         <button type="button" class="menu-nav" data-page="projectsPage">Projekte</button>
         <button type="button" class="menu-nav" data-page="calendarPage">Kalender</button>
-        <button type="button" class="menu-nav" data-page="inventoryPage">Inventur & Scanner</button>
         <button type="button" class="menu-nav" data-page="adminPage">Administration</button>
         <hr>
         <button type="button" id="menuSettingsBtn">Verbindung</button>
@@ -86,28 +85,27 @@
       <div id="calendarBookings" class="timeline"></div>
     </section>
 
-    <section id="inventoryPage" class="app-page hidden">
-      <div class="page-heading inventory-heading">
-        <div><small>COCOMAC ESSENTIAL</small><h2>Inventur & Scanner</h2></div>
-        <button id="inventoryScanBtn" type="button">QR-Code scannen</button>
-      </div>
-      <div class="inventory-toolbar">
-        <label>Inventurdatum<input id="inventoryDate" type="date"></label>
-        <label>Bezeichnung<input id="inventoryName" type="text" placeholder="z. B. Sommerinventur 2026"></label>
-        <button id="inventoryResetBtn" type="button" class="ghost">Neu beginnen</button>
-        <button id="inventorySaveBtn" type="button">Inventur speichern</button>
-      </div>
-      <div id="inventorySummary" class="stats"></div>
-      <div class="inventory-help">Scanne jeden vorhandenen Artikel. Bei Produkten mit mehreren Exemplaren erhöht jeder Scan die gezählte Menge um eins. Mengen können anschließend manuell korrigiert werden.</div>
-      <div id="inventoryList" class="inventory-list"></div>
-    </section>
-
     <section id="adminPage" class="app-page hidden">
       <div class="page-heading">
         <div><small>COCOMAC ESSENTIAL</small><h2>Administration</h2></div>
         <div class="admin-heading-actions"><button id="adminLogoutBtn" type="button" class="ghost">Abmelden</button><button id="syncDriveImagesBtn" type="button" class="ghost">Bilder aus Drive zuordnen</button><button id="adminAddProductBtn" type="button">+ Neues Produkt</button></div>
       </div>
       <div class="admin-intro">Hier verwaltest du Produkte. Dieser Bereich ist bewusst getrennt von der täglichen Equipment-Ansicht.</div>
+      <section id="inventoryPage" class="admin-section admin-inventory-section">
+            <div class="section-heading-inline inventory-heading">
+              <div><h3>Inventur & Scanner</h3><p class="field-help">Geschützter Inventurbereich. Scans und Bestandszählungen sind nur nach der Administration-Anmeldung möglich.</p></div>
+              <button id="inventoryScanBtn" type="button">QR-Code scannen</button>
+            </div>
+            <div class="inventory-toolbar">
+              <label>Inventurdatum<input id="inventoryDate" type="date"></label>
+              <label>Bezeichnung<input id="inventoryName" type="text" placeholder="z. B. Sommerinventur 2026"></label>
+              <button id="inventoryResetBtn" type="button" class="ghost">Neu beginnen</button>
+              <button id="inventorySaveBtn" type="button">Inventur speichern</button>
+            </div>
+            <div id="inventorySummary" class="stats"></div>
+            <div class="inventory-help">Scanne jeden vorhandenen Artikel. Bei Produkten mit mehreren Exemplaren erhöht jeder Scan die gezählte Menge um eins. Mengen können anschließend manuell korrigiert werden.</div>
+            <div id="inventoryList" class="inventory-list"></div>
+          </section>
       <section class="admin-section">
         <h3>Projekte verwalten</h3>
         <p class="field-help">Projekte können ausschließlich hier gelöscht werden.</p>
@@ -531,7 +529,7 @@
     </form>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.8.0</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.8.1</div>
 
   <div
     id="toast"
@@ -540,6 +538,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=580" type="module"></script>
+  <script src="./app.js?v=581" type="module"></script>
 </body>
 </html>

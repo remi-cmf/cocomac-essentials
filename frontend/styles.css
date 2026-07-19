@@ -326,3 +326,13 @@ textarea { resize: vertical; }
 .inventory-list{display:grid;gap:8px}.inventory-row{display:grid;grid-template-columns:56px minmax(0,1fr) 180px 48px;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px}.inventory-row img{width:56px;height:56px;object-fit:contain;background:var(--paper);border-radius:11px}.inventory-copy{display:grid;gap:3px;min-width:0}.inventory-copy small{color:var(--muted);overflow-wrap:anywhere}.inventory-count-control{display:grid;grid-template-columns:44px 1fr 44px;gap:6px}.inventory-count-control button,.inventory-count-control input{min-height:42px;text-align:center;padding:6px}.inventory-diff{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;font-weight:900}.inventory-diff.ok{background:#e6f3eb;color:var(--ok)}.inventory-diff.missing{background:#f7e5e5;color:var(--bad)}.inventory-diff.extra{background:#fff2d7;color:#8a5a00}
 .calculation-save-bar{display:flex;align-items:center;gap:12px;justify-content:flex-end;flex-wrap:wrap;margin:16px 0}.calculation-save-bar-top{position:sticky;top:0;z-index:3;background:var(--paper);padding:10px 0;border-bottom:1px solid var(--line)}.calculation-save-bar button{min-width:210px}
 @media(max-width:700px){.calendar-filter{grid-template-columns:1fr 1fr!important;width:100%!important}.calendar-filter button{grid-column:1/-1}.inventory-toolbar{grid-template-columns:1fr 1fr}.inventory-toolbar label:nth-child(2){grid-column:1/-1}.inventory-toolbar button{width:100%}.inventory-row{grid-template-columns:48px minmax(0,1fr) 42px}.inventory-row img{width:48px;height:48px}.inventory-count-control{grid-column:1/-1;grid-row:2;grid-template-columns:48px 1fr 48px}.inventory-diff{grid-column:3;grid-row:1}.calculation-save-bar{display:grid;grid-template-columns:1fr}.calculation-save-bar button{width:100%;min-width:0}}
+
+/* Version 5.8.1: einheitliche weiße Bildflächen */
+.admin-product-row>img,.admin-product-row>.image-placeholder,
+.inventory-row img,.reservation-product-summary img,
+.product-dialog .image-preview,.product-dialog .image-preview img {
+  background:#fff!important;
+}
+.admin-product-row>img,.inventory-row img { object-fit:contain!important; object-position:center!important; }
+.admin-inventory-section { border-top:1px solid var(--line); padding-top:18px; }
+.admin-inventory-section .inventory-heading { align-items:flex-start; }
