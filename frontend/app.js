@@ -36,6 +36,29 @@ let automaticImageSyncAttempted = false;
 let qrCodes = [];
 let productQrScanReturnDialog = null;
 
+
+const PRODUCT_CATEGORIES = Object.freeze([
+  { name: 'Cleaning / Reinigung', code: 'CLN', aliases: ['cleaning','reinigung','cleaning / reinigung','reinigung / cleaning','clean'] },
+  { name: 'Küche', code: 'KIT', aliases: ['küche','kueche','kitchen','kit'] },
+  { name: 'Setbau / Requisite', code: 'SET', aliases: ['setbau / requisite','setbau','requisite','setbau und requisite','set'] },
+  { name: 'Sicherheit', code: 'SAF', aliases: ['sicherheit','safety','safe','saf'] },
+  { name: 'Technik', code: 'TEC', aliases: ['technik','technical','technology','tech','tec'] },
+  { name: 'Transport', code: 'TRP', aliases: ['transport','transportation','trp'] }
+]);
+
+function categoryKey(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function categoryDefinition(value) {
+  const key = categoryKey(value);
+  return PRODUCT_CATEGORIES.find(entry => entry.code.toLowerCase() === key || entry.aliases.some(alias => categoryKey(alias) === key)) || null;
+}
+
+function canonicalCategory(value) {
+  return categoryDefinition(value)?.name || String(value || '').trim() || 'Sonstiges';
+}
+
 async function boot() {
   // Google Sheets ist die zentrale Datenquelle. Die große lokale Importdatei
   // wird nicht mehr bei jedem Start heruntergeladen.
@@ -149,7 +172,7 @@ function normalizeProduct(item) {
   return {
     id: String(item.id || '').toUpperCase(),
     name: String(item.name || ''),
-    category: String(item.category || 'Sonstiges'),
+    category: canonicalCategory(item.category),
     location: String(item.location || ''),
     total: Number(item.total || 1),
     condition: String(item.condition || 'Gut'),
@@ -627,24 +650,12 @@ function applyLocalReservationAction(payload) {
 function populateCategoryOptions() {
   const select = $('#productCategory');
   if (!select) return;
-
-  const previousValue = select.value;
-  const categories = [...new Set(
-    catalog
-      .map(item => String(item.category || '').trim())
-      .filter(Boolean)
-  )].sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
-
+  const previousValue = canonicalCategory(select.value);
   select.innerHTML = [
     '<option value="">Kategorie auswählen</option>',
-    ...categories.map(category =>
-      `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`
-    )
+    ...PRODUCT_CATEGORIES.map(entry => `<option value="${escapeHtml(entry.name)}">${escapeHtml(entry.name)} (${entry.code})</option>`)
   ].join('');
-
-  if (previousValue && categories.includes(previousValue)) {
-    select.value = previousValue;
-  }
+  if (PRODUCT_CATEGORIES.some(entry => entry.name === previousValue)) select.value = previousValue;
 }
 
 function populateDriveImageOptions(selectedUrl = '') {
@@ -701,11 +712,7 @@ function openProductDialog(productId = '') {
 }
 
 function categoryCode(category) {
-  const normalized = String(category || 'ART')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .toUpperCase();
-  return (normalized.slice(0, 3) || 'ART').padEnd(3, 'X');
+  return categoryDefinition(category)?.code || 'ART';
 }
 
 function nextProductId(category) {
@@ -720,9 +727,9 @@ function nextProductId(category) {
 }
 
 function updateProductIdPreview() {
-  const category = $('#productCategory').value.trim();
+  const category = canonicalCategory($('#productCategory').value.trim());
   $('#newProductIdPreview').textContent = category
-    ? `Kategorie gewählt: ${category}. Kürzel und nächste freie Nummer werden beim Speichern vergeben.`
+    ? `Kategorie gewählt: ${category} (${categoryCode(category)}). Die nächste freie Nummer wird beim Speichern vergeben.`
     : 'Die Artikel-ID wird beim Speichern automatisch erzeugt.';
 }
 
@@ -807,7 +814,7 @@ async function submitProduct(event) {
 
   const editId = $('#productEditId').value;
   const existing = catalog.find(item => item.id === editId);
-  const category = $('#productCategory').value.trim();
+  const category = canonicalCategory($('#productCategory').value.trim());
   const raw = {
     ...existing,
     id: existing?.id || '',

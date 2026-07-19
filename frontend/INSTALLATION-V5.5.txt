@@ -1,0 +1,12 @@
+COCOMAC ESSENTIALS 5.5
+
+Kategorien und Kürzel:
+Cleaning / Reinigung = CLN
+Küche = KIT
+Setbau / Requisite = SET
+Sicherheit = SAF
+Technik = TEC
+Transport = TRP
+
+Zuerst Code.gs 5.5 einspielen, setupCocomacEssentials ausführen und eine neue Web-App-Version bereitstellen. Die Einrichtung normalisiert bestehende Kategorien und korrigiert falsche Produktkürzel samt Verweisen in Reservierungen, Schäden, Bewegungen und QR-Codes.
+Danach Frontend-Dateien vollständig bei GitHub ersetzen.
