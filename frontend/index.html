@@ -334,11 +334,11 @@
           </select>
         </label>
         <label>Foto
-          <input id="productImage" type="file" accept="image/*" class="visually-hidden">
-          <div id="productImageDropzone" class="image-dropzone" tabindex="0">
-            <div id="productImagePreview" class="image-preview"><span>Foto auswählen</span></div>
-            <strong>Fotomediathek, Kamera oder Datei öffnen</strong>
-            <small>Das Bild wird beim Speichern verkleinert und in Google Drive abgelegt.</small>
+          <div id="productImageDropzone" class="image-dropzone">
+            <div id="productImagePreview" class="image-preview"><span>Noch kein Foto ausgewählt</span></div>
+            <label for="productImage" class="native-file-button">Bild auswählen oder Foto aufnehmen</label>
+            <input id="productImage" type="file" accept="image/*" class="native-file-input">
+            <small>Nach der Auswahl erscheint das Bild sofort hier. Hochgeladen wird es beim Speichern.</small>
           </div>
         </label>
         <label>Oder vorhandenes Bild aus Google Drive
@@ -513,6 +513,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=544" type="module"></script>
+  <script src="./app.js?v=547" type="module"></script>
 </body>
 </html>

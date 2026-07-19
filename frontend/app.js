@@ -727,70 +727,77 @@ function updateProductIdPreview() {
 }
 
 function bindImageUpload() {
-  const dropzone = $('#productImageDropzone');
   const input = $('#productImage');
-  const choose = () => input.click();
+  if (!input) return;
 
-  dropzone.onclick = choose;
-  dropzone.onkeydown = event => {
-    if (event.key === 'Enter' || event.key === ' ') choose();
-  };
-  input.onchange = () => handleImageFile(input.files?.[0]);
-
-  ['dragenter', 'dragover'].forEach(type => {
-    dropzone.addEventListener(type, event => {
-      event.preventDefault();
-      dropzone.classList.add('dragover');
-    });
+  input.addEventListener('change', event => {
+    const file = event.target.files && event.target.files[0];
+    handleImageFile(file);
   });
-  ['dragleave', 'drop'].forEach(type => {
-    dropzone.addEventListener(type, event => {
-      event.preventDefault();
-      dropzone.classList.remove('dragover');
-    });
-  });
-  dropzone.addEventListener('drop', event => handleImageFile(event.dataTransfer.files?.[0]));
 }
 
 async function handleImageFile(file) {
-  if (!file) return;
-  if (!file.type.startsWith('image/')) return toast('Bitte eine Bilddatei auswählen.');
-  if (file.size > 10 * 1024 * 1024) return toast('Das Foto darf höchstens 10 MB groß sein.');
+  const status = $('#productSaveStatus');
+  if (!file) {
+    if (status) { status.hidden = false; status.textContent = 'Es wurde kein Foto ausgewählt.'; }
+    return;
+  }
 
-  try {
-    selectedProductImage = await compressImage(file, 720, 0.58);
-    if ($('#productDriveImage')) $('#productDriveImage').value = '';
-    $('#productImagePreview').innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)} · bereit zum Hochladen</span>`;
-    const status = $('#productSaveStatus');
-    if (status) { status.hidden = false; status.textContent = 'Foto ausgewählt. Tippe unten auf Produkt speichern.'; }
-  } catch (error) {
-    toast('Foto konnte nicht verarbeitet werden.');
+  const mime = String(file.type || '').toLowerCase();
+  if (mime && !mime.startsWith('image/')) {
+    if (status) { status.hidden = false; status.textContent = 'Bitte eine Bilddatei auswählen.'; }
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    if (status) { status.hidden = false; status.textContent = 'Das Foto ist größer als 25 MB. Bitte ein kleineres Foto auswählen.'; }
+    return;
+  }
+
+  if (selectedProductImage?.previewUrl) URL.revokeObjectURL(selectedProductImage.previewUrl);
+  const previewUrl = URL.createObjectURL(file);
+  selectedProductImage = {
+    file,
+    previewUrl,
+    filename: file.name || `foto-${Date.now()}.jpg`,
+    mimeType: file.type || 'image/jpeg'
+  };
+  if ($('#productDriveImage')) $('#productDriveImage').value = '';
+  $('#productImagePreview').innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="Ausgewähltes Foto"><span>${escapeHtml(selectedProductImage.filename)}</span>`;
+  if (status) {
+    status.hidden = false;
+    status.textContent = 'Foto ausgewählt. Jetzt unten auf „Produkt speichern“ tippen.';
   }
 }
 
-function compressImage(file, maxSize, quality) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
+async function compressImageFile(file, maxSize = 720, quality = 0.58) {
+  let bitmap = null;
+  try {
+    if ('createImageBitmap' in window) bitmap = await createImageBitmap(file);
+  } catch (_) {}
+
+  if (!bitmap) {
+    bitmap = await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
       const image = new Image();
-      image.onerror = reject;
-      image.onload = () => {
-        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(image.width * scale);
-        canvas.height = Math.round(image.height * scale);
-        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve({
-          dataUrl: canvas.toDataURL('image/jpeg', quality),
-          mimeType: 'image/jpeg',
-          filename: file.name.replace(/\.[^.]+$/, '') + '.jpg'
-        });
-      };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+      image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Das Fotoformat konnte auf diesem Gerät nicht gelesen werden. Bitte das Foto als JPG oder PNG auswählen.')); };
+      image.src = url;
+    });
+  }
+
+  const width = bitmap.width || bitmap.naturalWidth;
+  const height = bitmap.height || bitmap.naturalHeight;
+  if (!width || !height) throw new Error('Das Foto hat keine gültigen Abmessungen.');
+  const scale = Math.min(1, maxSize / Math.max(width, height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  if (bitmap.close) bitmap.close();
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+  if (!dataUrl || dataUrl.length < 100) throw new Error('Das Foto konnte nicht in JPG umgewandelt werden.');
+  return { dataUrl, mimeType: 'image/jpeg', filename: String(file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg' };
 }
 
 async function submitProduct(event) {
@@ -839,13 +846,18 @@ async function submitProduct(event) {
     const metaResponse = await sendCloudJsonpAction('addProduct', adminPayload({ ...product, imageBase64: '' }));
     let savedProduct = metaResponse?.product ? normalizeProduct(metaResponse.product) : await waitForSavedProduct(id, { timeoutMs: 20000 });
 
-    if (selectedProductImage?.dataUrl) {
+    if (selectedProductImage?.file || selectedProductImage?.dataUrl) {
+      button.textContent = 'Foto wird verarbeitet …';
+      status.textContent = 'Foto wird für den Upload vorbereitet …';
+      const preparedImage = selectedProductImage.dataUrl
+        ? selectedProductImage
+        : await compressImageFile(selectedProductImage.file, 720, 0.58);
       button.textContent = 'Foto wird hochgeladen …';
-      status.textContent = 'Das Foto wird verkleinert in Google Drive gespeichert. Bitte die App geöffnet lassen …';
+      status.textContent = 'Das Foto wird in Google Drive gespeichert. Bitte die App geöffnet lassen …';
       const uploadResult = await uploadProductImageConfirmed({
         productId: id,
         category,
-        imageBase64: selectedProductImage.dataUrl,
+        imageBase64: preparedImage.dataUrl,
         imageName: `${id}.jpg`
       }, (done, total) => {
         const percent = Math.max(1, Math.round((done / total) * 100));
@@ -1105,6 +1117,7 @@ function bind() {
     const url = event.target.value;
     if (!url) { selectedProductImage = null; return; }
     const option = event.target.selectedOptions[0];
+    if ($('#productImage')) $('#productImage').value = '';
     selectedProductImage = { existingUrl: url, filename: option?.dataset?.name || 'Drive-Bild' };
     $('#productImagePreview').innerHTML = `<img src="${escapeHtml(url)}" alt="Vorschau"><span>${escapeHtml(selectedProductImage.filename)}</span>`;
   };
