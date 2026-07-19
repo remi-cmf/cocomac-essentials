@@ -273,3 +273,17 @@ textarea { resize: vertical; }
 .image-preview{min-height:180px}
 .image-preview img{max-height:260px}
 @media(max-width:640px){.native-file-input{font-size:15px!important}.native-file-input::file-selector-button{width:100%;margin:0 0 8px 0}.image-preview{min-height:150px}}
+
+
+/* Version 5.5.1: Mengen-Stepper für Projektbuchungen */
+.quantity-field{min-width:0}
+.quantity-stepper{display:grid;grid-template-columns:56px minmax(72px,1fr) 56px;align-items:stretch;gap:8px;width:100%;margin-top:8px}
+.quantity-stepper input{width:100%!important;min-width:0!important;margin:0!important;text-align:center;font-weight:800;font-size:1.08rem;-moz-appearance:textfield}
+.quantity-stepper input::-webkit-outer-spin-button,.quantity-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.quantity-stepper-button{display:flex;align-items:center;justify-content:center;min-width:0!important;width:56px!important;padding:0!important;border-radius:16px!important;font-size:1.8rem!important;font-weight:700!important;line-height:1!important;background:#171716!important;color:#fff!important;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.quantity-stepper-button:active{transform:scale(.96)}
+@media(max-width:640px){
+  .quantity-stepper{grid-template-columns:64px minmax(0,1fr) 64px;gap:10px}
+  .quantity-stepper-button{width:64px!important;min-height:58px!important;border-radius:18px!important;font-size:2rem!important}
+  .quantity-stepper input{min-height:58px!important;font-size:1.25rem!important}
+}

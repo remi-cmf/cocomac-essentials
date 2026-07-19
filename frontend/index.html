@@ -403,7 +403,13 @@
       <div id="reservationAvailability" class="availability-note"></div>
 
       <div class="form-columns">
-        <label>Menge<input id="reservationQuantity" type="number" min="1" value="1" required></label>
+        <label class="quantity-field">Menge
+          <div class="quantity-stepper" role="group" aria-label="Menge auswählen">
+            <button id="reservationQuantityMinus" type="button" class="quantity-stepper-button" aria-label="Menge verringern">−</button>
+            <input id="reservationQuantity" type="number" min="1" value="1" inputmode="numeric" required aria-label="Menge">
+            <button id="reservationQuantityPlus" type="button" class="quantity-stepper-button" aria-label="Menge erhöhen">+</button>
+          </div>
+        </label>
         <label>Status<select id="reservationStatus"><option selected>Reserviert</option><option>Ausgegeben</option><option>Zurückgegeben</option><option>Storniert</option></select></label>
         <label>Von<input id="reservationFrom" type="date" required></label>
         <label>Bis<input id="reservationTo" type="date" required></label>

@@ -1108,6 +1108,10 @@ function bind() {
   $('#reservationFrom').onchange = updateReservationAvailability;
   $('#reservationTo').onchange = updateReservationAvailability;
   $('#reservationQuantity').oninput = updateReservationAvailability;
+  $('#reservationQuantity').onchange = () => setReservationQuantity($('#reservationQuantity').value, true);
+  $('#reservationQuantity').onblur = () => setReservationQuantity($('#reservationQuantity').value, false);
+  $('#reservationQuantityMinus').onclick = () => changeReservationQuantity(-1);
+  $('#reservationQuantityPlus').onclick = () => changeReservationQuantity(1);
   $('#deleteReservationBtn').onclick = removeReservationFromProject;
   $('#refreshCalendarBtn').onclick = renderCalendar;
   $('#actionForm').onsubmit = submitMovement;
@@ -1655,6 +1659,50 @@ function updateReservationProjectInfo() {
       <div><small>Bereits zugeordnet</small><b>${projectReservations(project.id).reduce((sum, row) => sum + row.quantity, 0)} Teile</b></div>
     </div>`;
   updateReservationAvailability();
+}
+
+function reservationQuantityMaximum() {
+  const productId = $('#reservationProduct')?.value || '';
+  const from = $('#reservationFrom')?.value || '';
+  const to = $('#reservationTo')?.value || '';
+  const editId = $('#reservationEditId')?.value || '';
+  if (!productId || !from || !to) return 1;
+  return Math.max(0, Number(availableFor(productId, from, to, editId) || 0));
+}
+
+function setReservationQuantity(nextValue, showLimitMessage = false) {
+  const input = $('#reservationQuantity');
+  if (!input) return;
+  const maximum = reservationQuantityMaximum();
+  let value = Math.round(Number(nextValue));
+  if (!Number.isFinite(value)) value = 1;
+  value = Math.max(1, value);
+  if (maximum > 0 && value > maximum) {
+    value = maximum;
+    if (showLimitMessage) toast(`Maximalkapazität erreicht: Es sind nur ${maximum} Stück verfügbar.`);
+  } else if (maximum < 1) {
+    value = 1;
+    if (showLimitMessage) toast('Für diesen Zeitraum ist kein weiteres Stück verfügbar.');
+  }
+  input.value = String(value);
+  updateReservationAvailability();
+}
+
+function changeReservationQuantity(direction) {
+  const input = $('#reservationQuantity');
+  const current = Math.max(1, Math.round(Number(input?.value || 1)));
+  const maximum = reservationQuantityMaximum();
+  if (direction > 0 && maximum > 0 && current >= maximum) {
+    input.value = String(maximum);
+    toast(`Maximalkapazität erreicht: Es sind nur ${maximum} Stück verfügbar.`);
+    return;
+  }
+  if (direction < 0 && current <= 1) {
+    input.value = '1';
+    toast('Die Mindestmenge ist 1.');
+    return;
+  }
+  setReservationQuantity(current + direction, true);
 }
 
 function updateReservationAvailability() {

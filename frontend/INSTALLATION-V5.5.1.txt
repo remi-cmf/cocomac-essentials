@@ -1,0 +1,3 @@
+COCOMAC ESSENTIALS – VERSION 5.5.1
+
+Neu: Mengen-Stepper mit Plus/Minus im Projekt-Dialog. Direkte Tastatureingabe bleibt möglich. Die Menge wird auf 1 bis zur tatsächlich verfügbaren Höchstmenge begrenzt.
