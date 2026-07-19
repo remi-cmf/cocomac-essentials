@@ -239,3 +239,28 @@ textarea { resize: vertical; }
   .admin-product-row .admin-row-actions button{width:100%!important;min-width:0!important;padding:12px 8px!important;font-size:1rem!important;white-space:nowrap!important}
   .product-dialog{max-height:calc(100dvh - 12px)!important}
 }
+
+
+/* Version 5.4.5: kompakte mobile Administration und zweistufiges Produktformular */
+.product-form-step{display:grid;gap:14px;padding:16px;border:1px solid var(--line);border-radius:18px;background:#fff;margin:14px 0}
+.product-form-step h3{margin:0}.product-final-step{background:#f4f1e7}
+.product-dialog-actions{display:grid;gap:10px}.subtle-danger{background:transparent!important;color:#a42d2d!important;border:1px solid #d8aaaa!important}
+.admin-product-copy{min-width:0;overflow-wrap:anywhere}.admin-product-row .admin-row-actions{align-self:center}
+@media(max-width:700px){
+  #adminPage>.page-heading>div:first-child{display:none}
+  #adminPage>.page-heading{display:block;margin-bottom:14px}
+  #adminPage .admin-heading-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
+  #adminPage .admin-heading-actions #adminAddProductBtn{grid-column:1/-1}
+  #adminPage .admin-heading-actions button{min-height:44px!important;padding:10px 8px!important;font-size:.92rem!important;line-height:1.15!important}
+  .admin-intro{font-size:1rem!important;padding:16px!important}
+  .admin-product-row{grid-template-columns:64px minmax(0,1fr) auto!important;gap:10px!important;padding:12px!important;align-items:center!important}
+  .admin-product-row>img,.admin-product-row>.image-placeholder{width:64px!important;height:64px!important}
+  .admin-product-row .admin-row-actions{grid-column:auto!important;display:block!important;width:auto!important}
+  .admin-product-row .admin-row-actions button{width:auto!important;min-height:40px!important;padding:9px 12px!important;font-size:.9rem!important}
+  .product-form-step{padding:13px;border-radius:15px}.product-dialog-actions{position:sticky;bottom:-16px;background:var(--paper,#f6f2e8);padding:10px 0 16px;z-index:3}
+}
+@media(max-width:430px){
+  .admin-product-row{grid-template-columns:58px minmax(0,1fr)!important}
+  .admin-product-row>img,.admin-product-row>.image-placeholder{width:58px!important;height:58px!important}
+  .admin-product-row .admin-row-actions{grid-column:1/-1!important}.admin-product-row .admin-row-actions button{width:100%!important}
+}

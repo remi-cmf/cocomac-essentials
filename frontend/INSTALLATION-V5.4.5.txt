@@ -1,0 +1,1 @@
+Version 5.4.5: Mobile Administration kompakter, Löschen nur im Bearbeiten-Dialog, zweistufiges Produktformular, serverseitige automatische Artikelnummer und separater Foto-Upload in Kategorie-Unterordner.

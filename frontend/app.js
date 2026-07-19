@@ -690,7 +690,12 @@ function openProductDialog(productId = '') {
   } else {
     $('#productImagePreview').innerHTML = '<span>Foto hier ablegen oder auswählen</span>';
     $('#productQrCode').value = '';
-    $('#newProductIdPreview').textContent = 'Die Artikel-ID wird automatisch erzeugt.';
+    $('#newProductIdPreview').textContent = 'Die Artikel-ID wird beim Speichern automatisch erzeugt.';
+  }
+  const deleteButton = $('#deleteProductInDialogBtn');
+  if (deleteButton) {
+    deleteButton.hidden = !product;
+    deleteButton.onclick = product ? () => deleteProduct(product.id, { closeDialog: true }) : null;
   }
   $('#productDialog').showModal();
 }
@@ -717,8 +722,8 @@ function nextProductId(category) {
 function updateProductIdPreview() {
   const category = $('#productCategory').value.trim();
   $('#newProductIdPreview').textContent = category
-    ? `Neue Artikel-ID: ${nextProductId(category)}`
-    : 'Die Artikel-ID wird automatisch erzeugt.';
+    ? `Kategorie gewählt: ${category}. Kürzel und nächste freie Nummer werden beim Speichern vergeben.`
+    : 'Die Artikel-ID wird beim Speichern automatisch erzeugt.';
 }
 
 function bindImageUpload() {
@@ -753,7 +758,7 @@ async function handleImageFile(file) {
   if (file.size > 10 * 1024 * 1024) return toast('Das Foto darf höchstens 10 MB groß sein.');
 
   try {
-    selectedProductImage = await compressImage(file, 1200, 0.72);
+    selectedProductImage = await compressImage(file, 900, 0.65);
     if ($('#productDriveImage')) $('#productDriveImage').value = '';
     $('#productImagePreview').innerHTML = `<img src="${selectedProductImage.dataUrl}" alt="Vorschau"><span>${escapeHtml(file.name)} · bereit zum Hochladen</span>`;
     const status = $('#productSaveStatus');
@@ -790,96 +795,73 @@ function compressImage(file, maxSize, quality) {
 
 async function submitProduct(event) {
   event.preventDefault();
-
-  if (!settings().cloudMode) {
-    toast('Speichern ist nur mit aktiver Google-Sheets-Verbindung möglich.');
-    return;
-  }
-  if (!(await ensureAdminAccess())) {
-    toast('Bitte zuerst als Administrator anmelden und danach erneut speichern.');
-    return;
-  }
+  if (!settings().cloudMode) return toast('Speichern ist nur mit aktiver Google-Sheets-Verbindung möglich.');
+  if (!(await ensureAdminAccess())) return toast('Bitte zuerst als Administrator anmelden.');
 
   const editId = $('#productEditId').value;
   const existing = catalog.find(item => item.id === editId);
   const category = $('#productCategory').value.trim();
-  const id = existing?.id || nextProductId(category);
-  const product = normalizeProduct({
+  const raw = {
     ...existing,
-    id,
-    name: $('#productName').value.trim(),
-    category,
-    location: $('#productLocation').value.trim(),
-    total: Number($('#productTotal').value),
-    condition: $('#productCondition').value,
-    description: $('#productDescription').value.trim(),
-    dimensions: $('#productDimensions').value.trim(),
-    dailyPrice: Number($('#productDailyPrice').value || 0),
-    replacementValue: Number($('#productReplacementValue').value || 0),
-    purchasePrice: Number($('#productPurchasePrice').value || 0),
-    weight: $('#productWeight').value.trim(),
-    manufacturer: $('#productManufacturer').value.trim(),
-    serialNumber: $('#productSerialNumber').value.trim(),
-    qrCode: normalizeQrCode($('#productQrCode').value),
-    purchaseDate: $('#productPurchaseDate').value,
-    notes: $('#productNotes').value.trim(),
-    productUrl: makeProductUrl(id),
-    imageUrl: selectedProductImage?.existingUrl || existing?.imageUrl || ''
-  });
+    id: existing?.id || '',
+    name: $('#productName').value.trim(), category,
+    location: $('#productLocation').value.trim(), total: Number($('#productTotal').value),
+    condition: $('#productCondition').value, description: $('#productDescription').value.trim(),
+    dimensions: $('#productDimensions').value.trim(), dailyPrice: Number($('#productDailyPrice').value || 0),
+    replacementValue: Number($('#productReplacementValue').value || 0), purchasePrice: Number($('#productPurchasePrice').value || 0),
+    weight: $('#productWeight').value.trim(), manufacturer: $('#productManufacturer').value.trim(),
+    serialNumber: $('#productSerialNumber').value.trim(), qrCode: normalizeQrCode($('#productQrCode').value),
+    purchaseDate: $('#productPurchaseDate').value, notes: $('#productNotes').value.trim(),
+    imageUrl: ($('#productDriveImage')?.value || existing?.imageUrl || '')
+  };
+  if (!raw.name || !raw.category || !raw.location) return toast('Bitte Name, Standort und Kategorie ausfüllen.');
+  if (!Number.isInteger(raw.total) || raw.total < 1) return toast('Bitte eine gültige Menge eingeben.');
+  if ($('#productQrCode').value.trim() && !raw.qrCode) return toast('Der QR-Code hat kein gültiges Format.');
 
-  if (!product.name || !product.category || !product.location) return toast('Bitte Name, Kategorie und Standort ausfüllen.');
-  if ($('#productQrCode').value.trim() && !product.qrCode) return toast('Der QR-Code hat kein gültiges Format.');
-  if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
-
-  const saveButton = $('#saveProductBtn');
+  const button = $('#saveProductBtn');
   const status = $('#productSaveStatus');
-  const originalLabel = existing ? 'Änderungen speichern' : 'Produkt speichern';
-  saveButton.disabled = true;
-  saveButton.textContent = selectedProductImage?.dataUrl ? 'Foto wird hochgeladen …' : 'Wird gespeichert …';
-  if (status) {
-    status.hidden = false;
-    status.textContent = selectedProductImage?.dataUrl
-      ? 'Das Foto wird in Google Drive gespeichert. Bitte dieses Fenster geöffnet lassen.'
-      : 'Das Produkt wird in Google Sheets gespeichert.';
-  }
+  const original = existing ? 'Änderungen speichern' : 'Produkt speichern';
+  button.disabled = true;
+  button.textContent = 'Wird vorbereitet …';
+  status.hidden = false;
 
   try {
-    const payload = {
-      ...product,
-      imageBase64: selectedProductImage?.dataUrl || '',
-      imageName: `${id}.jpg`
-    };
-
-    let savedProduct;
-    if (payload.imageBase64) {
-      // Große Bilddaten werden per POST übertragen. Anschließend wird so lange geprüft,
-      // bis Google Sheets die neue Drive-URL bestätigt.
-      await sendCloudAction({ action: 'addProduct', payload: adminPayload(payload) });
-      savedProduct = await waitForSavedProduct(id, { requireImage: true, timeoutMs: 60000 });
-    } else {
-      const response = await sendCloudJsonpAction('addProduct', adminPayload(payload));
-      savedProduct = response?.product ? normalizeProduct(response.product) : await waitForSavedProduct(id, { timeoutMs: 20000 });
+    let id = existing?.id || '';
+    if (!id) {
+      status.textContent = 'Die nächste freie Artikelnummer wird ermittelt …';
+      const idResponse = await sendCloudJsonpAction('nextProductId', adminPayload({ category }));
+      id = idResponse?.productId;
+      if (!id) throw new Error('Es konnte keine Artikelnummer erzeugt werden.');
     }
 
-    const savedIndex = catalog.findIndex(item => item.id === savedProduct.id);
-    if (savedIndex >= 0) catalog[savedIndex] = savedProduct;
-    else catalog.unshift(savedProduct);
+    const product = normalizeProduct({ ...raw, id, productUrl: makeProductUrl(id) });
+    status.textContent = 'Produktdaten werden gespeichert …';
+    const metaResponse = await sendCloudJsonpAction('addProduct', adminPayload({ ...product, imageBase64: '' }));
+    let savedProduct = metaResponse?.product ? normalizeProduct(metaResponse.product) : await waitForSavedProduct(id, { timeoutMs: 20000 });
 
+    if (selectedProductImage?.dataUrl) {
+      button.textContent = 'Foto wird hochgeladen …';
+      status.textContent = 'Das Foto wird verkleinert in Google Drive gespeichert. Bitte die App geöffnet lassen …';
+      await sendCloudAction({ action: 'uploadProductImage', payload: adminPayload({
+        productId: id, category, imageBase64: selectedProductImage.dataUrl, imageName: `${id}.jpg`
+      })});
+      savedProduct = await waitForSavedProduct(id, { requireImage: true, timeoutMs: 75000 });
+    }
+
+    const pos = catalog.findIndex(item => item.id === savedProduct.id);
+    if (pos >= 0) catalog[pos] = savedProduct; else catalog.unshift(savedProduct);
     selectedProductImage = null;
     render();
-    if (status) status.textContent = savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.';
-    toast(savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.');
-    setTimeout(() => {
-      if ($('#productDialog')?.open) $('#productDialog').close();
-      openDetail(savedProduct.id);
-    }, 350);
+    status.textContent = savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.';
+    toast(status.textContent);
+    setTimeout(() => { if ($('#productDialog')?.open) $('#productDialog').close(); }, 450);
   } catch (error) {
-    console.error('Produkt speichern fehlgeschlagen:', error);
-    if (status) status.textContent = 'Speichern fehlgeschlagen: ' + (error.message || 'Unbekannter Fehler');
-    toast('Produkt konnte nicht gespeichert werden: ' + (error.message || 'Unbekannter Fehler'));
+    console.error(error);
+    status.textContent = 'Speichern fehlgeschlagen: ' + (error.message || 'Unbekannter Fehler');
+    toast(status.textContent);
   } finally {
-    saveButton.disabled = false;
-    saveButton.textContent = originalLabel;
+    button.disabled = false;
+    button.textContent = original;
   }
 }
 
@@ -1807,15 +1789,14 @@ function renderAdminProducts() {
     const image = productImageSource(item);
     return `<div class="admin-product-row">
       ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">` : '<div class="image-placeholder">Kein Foto</div>'}
-      <div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · ${escapeHtml(item.category)} · Bestand ${item.total}</small></div>
-      <div class="admin-row-actions"><button type="button" class="ghost" data-edit-product="${escapeHtml(item.id)}">Bearbeiten</button><button type="button" class="danger" data-delete-product="${escapeHtml(item.id)}">Löschen</button></div>
+      <div class="admin-product-copy"><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · ${escapeHtml(item.category)} · Bestand ${item.total}</small></div>
+      <div class="admin-row-actions"><button type="button" class="ghost" data-edit-product="${escapeHtml(item.id)}">Bearbeiten</button></div>
     </div>`;
   }).join('') : '<div class="empty-state">Keine Produkte vorhanden.</div>';
   $$('[data-edit-product]').forEach(button => button.onclick = () => openProductDialog(button.dataset.editProduct));
-  $$('[data-delete-product]').forEach(button => button.onclick = () => deleteProduct(button.dataset.deleteProduct));
 }
 
-async function deleteProduct(productId) {
+async function deleteProduct(productId, options = {}) {
   if (!(await ensureAdminAccess())) {
     toast('Bitte zuerst als Administrator anmelden.');
     return;
@@ -1834,6 +1815,7 @@ async function deleteProduct(productId) {
     localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(localProducts));
     await refreshCatalog();
     render();
+    if (options.closeDialog && $('#productDialog')?.open) $('#productDialog').close();
     toast('Produkt gelöscht.');
   } catch (error) {
     toast('Produkt konnte nicht gelöscht werden: ' + error.message);
