@@ -23,6 +23,7 @@ let scanTarget = 'detail';
 let reservationScanSnapshot = null;
 let selectedProductImage = null;
 let imageLibrary = [];
+const LOCAL_PRODUCT_IMAGES = {"CME-KIT-008":"CME-KIT-008.jpg","CME-KIT-009":"CME-KIT-009.jpg","CME-CLN-001":"CME-CLN-001.png","CME-CLN-003":"CME-CLN-003.jpg","CME-CLN-002":"CME-CLN-002.png","CME-SET-008":"CME-SET-008.png","CME-SET-005":"CME-SET-005.jpg","CME-TRP-001":"CME-TRP-001.jpg","CME-SET-004":"CME-SET-004.jpg","CME-SET-006":"CME-SET-006.jpg","CME-SET-007":"CME-SET-007.png","CME-TEC-002":"CME-TEC-002.jpg","CME-SET-003":"CME-SET-003.jpg","CME-SET-002":"CME-SET-002.jpg","CME-TEC-001":"CME-TEC-001.jpg","CME-SET-001":"CME-SET-001.jpg","CME-KIT-002":"CME-KIT-002.jpg","CME-TRP-102":"CME-TRP-102.jpg","CME-SAF-004":"CME-SAF-004.jpg","CME-TRP-103":"CME-TRP-103.jpg","CME-KIT-003":"CME-KIT-003.jpg","CME-KIT-015":"CME-KIT-015.jpg","CME-KIT-001":"CME-KIT-001.jpg","CME-TRP-101":"CME-TRP-101.jpg","CME-KIT-014":"CME-KIT-014.jpg","CME-KIT-010":"CME-KIT-010.jpg","CME-KIT-004":"CME-KIT-004.jpg","CME-SAF-002":"CME-SAF-002.jpg","CME-SAF-003":"CME-SAF-003.jpg","CME-KIT-005":"CME-KIT-005.jpg","CME-KIT-011":"CME-KIT-011.jpg","CME-KIT-007":"CME-KIT-007.jpg","CME-KIT-013":"CME-KIT-013.jpg","CME-SAF-001":"CME-SAF-001.jpg","CME-KIT-012":"CME-KIT-012.jpg","CME-KIT-006":"CME-KIT-006.jpg"};
 let projects = [];
 let reservations = [];
 let damages = [];
@@ -167,7 +168,9 @@ function normalizeProduct(item) {
 function productImageSource(item) {
   if (item.imageUrl) return item.imageUrl;
   if (item.image?.startsWith('data:') || item.image?.startsWith('http')) return item.image;
-  return item.image ? `./assets/images/${item.image}` : '';
+  if (item.image) return `./assets/images/${item.image}`;
+  const localFilename = LOCAL_PRODUCT_IMAGES[String(item.id || '').toUpperCase()];
+  return localFilename ? `./assets/images/${localFilename}` : '';
 }
 
 function normalizedImageKey(value) {
@@ -1801,7 +1804,8 @@ function renderCalculationRows() {
 function readCalculationForm() {
   activeCalculation.discount = Math.min(100, Math.max(0, Math.round(Number($('#calculationDiscount').value || 0))));
   $('#calculationDiscount').value = String(activeCalculation.discount);
-  activeCalculation.extraCost = Number($('#calculationExtraCost').value || 0);
+  activeCalculation.extraCost = Math.max(0, Math.round(Number($('#calculationExtraCost').value || 0)));
+  $('#calculationExtraCost').value = String(activeCalculation.extraCost);
   activeCalculation.extraLabel = $('#calculationExtraLabel').value.trim();
   activeCalculation.taxMode = $('#calculationTaxMode').value;
   activeCalculation.note = $('#calculationNote').value.trim();
