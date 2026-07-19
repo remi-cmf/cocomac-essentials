@@ -1,0 +1,9 @@
+COCOMAC ESSENTIAL – VERSION 5.8.5
+
+Änderung:
+- Der Schriftzug oben lädt die komplette Seite jetzt wie der Neu-laden-Button des Browsers neu.
+- Der sichtbare Zusatz „NEU LADEN“ wurde entfernt.
+- Die Bedienung bleibt subtil und wird nur durch eine leichte Reaktion beim Antippen angezeigt.
+
+Installation:
+Den vollständigen Inhalt dieses Ordners in das GitHub-Repository kopieren und vorhandene Dateien ersetzen.

@@ -1443,37 +1443,9 @@ async function deleteProject(projectId) {
     await refreshCatalog(); render(); showPage('adminPage'); renderAdminProjects(); toast('Projekt gelöscht.');
   } catch (error) { toast(error.message || 'Projekt konnte nicht gelöscht werden.'); }
 }
-async function resetToHome() {
-  const button = $('#homeBrandBtn');
-  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
-  closeMainMenu();
-  activeProjectId = null;
-  activeReservationId = null;
-  activeCalculation = null;
-  const search = $('#search');
-  if (search) search.value = '';
-  try { history.replaceState({}, '', location.pathname); } catch (_) {}
-  showPage('equipmentPage');
-  window.scrollTo({top:0, behavior:'smooth'});
-
-  if (button) {
-    button.disabled = true;
-    button.classList.add('is-restarting');
-  }
-  const banner = $('#syncBanner');
-  if (banner) banner.textContent = 'Daten werden neu geladen …';
-  try {
-    await syncFromCloud({ showMessage: false, force: true });
-    toast('Cocomac Essential wurde neu geladen.');
-  } catch (error) {
-    render();
-    toast('Neustart fehlgeschlagen: ' + error.message);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.classList.remove('is-restarting');
-    }
-  }
+function resetToHome() {
+  // Echter Seiten-Neustart, identisch mit dem Neu-laden des Browsers.
+  window.location.reload();
 }
 
 function showPage(pageId) {

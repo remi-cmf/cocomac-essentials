@@ -1,5 +1,5 @@
-const CACHE_NAME = 'cocomac-v5-8-4';
-const APP_SHELL = ['./','./index.html?v=584','./styles.css?v=584','./app.js?v=584','./manifest.webmanifest'];
+const CACHE_NAME = 'cocomac-v5-8-5';
+const APP_SHELL = ['./','./index.html?v=585','./styles.css?v=585','./app.js?v=585','./manifest.webmanifest'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))); self.clients.claim(); });
 self.addEventListener('fetch', event => {
