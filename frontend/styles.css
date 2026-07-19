@@ -218,3 +218,6 @@ textarea { resize: vertical; }
   .reservation-product-picker { grid-template-columns: 1fr; }
   .reservation-product-picker button { width: 100%; }
 }
+
+/* Version 5.4: QR-Code-Datenbank */
+.qr-database-controls{display:grid;grid-template-columns:minmax(180px,260px) auto auto;gap:12px;align-items:end;margin:14px 0}.qr-database-controls label{margin:0}.input-with-button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.qr-code-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;overflow-wrap:anywhere}.qr-status-free{color:#1f7a51}.qr-status-assigned{color:#745b18}@media(max-width:720px){.qr-database-controls{grid-template-columns:1fr}.input-with-button{grid-template-columns:1fr}.input-with-button button{width:100%}}

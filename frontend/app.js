@@ -33,6 +33,8 @@ let cloudSyncTimer = null;
 let cloudSyncRunning = false;
 let lastCloudSyncAt = 0;
 let automaticImageSyncAttempted = false;
+let qrCodes = [];
+let productQrScanReturnDialog = null;
 
 async function boot() {
   // Google Sheets ist die zentrale Datenquelle. Die große lokale Importdatei
@@ -55,7 +57,8 @@ async function boot() {
 
   const params = new URLSearchParams(location.search);
   const directId = params.get('id') || params.get('item');
-  if (directId) openDetail(directId);
+  const directQr = params.get('qr');
+  if (directQr) handleScannedArticle(directQr); else if (directId) openDetail(directId);
 }
 
 function readJson(key, fallback) {
@@ -90,6 +93,7 @@ async function refreshCatalog() {
   reservations = (snapshot.reservations || []).map(normalizeReservation);
   damages = Array.isArray(snapshot.damages) ? snapshot.damages.map(normalizeDamage) : [];
   if (Array.isArray(snapshot.images)) imageLibrary = snapshot.images;
+  if (Array.isArray(snapshot.qrCodes)) qrCodes = snapshot.qrCodes;
   applyLocalDriveImageMatches();
 
   // Die Zuordnung wird einmal pro Sitzung automatisch in Google Sheets gespeichert.
@@ -157,6 +161,7 @@ function normalizeProduct(item) {
     weight: String(item.weight || ''),
     manufacturer: String(item.manufacturer || ''),
     serialNumber: String(item.serialNumber || ''),
+    qrCode: String(item.qrCode || '').toUpperCase(),
     purchaseDate: String(item.purchaseDate || ''),
     notes: String(item.notes || ''),
     image: String(item.image || ''),
@@ -293,9 +298,10 @@ function render() {
   $('#syncBanner').textContent = 'Synchronisierung aktiv: Änderungen werden über Google Sheets auf allen Geräten übernommen.';
   $('#syncBanner').classList.remove('demo');
   renderProjects();
-  if (!$('#adminPage')?.classList.contains('hidden')) { renderAdminProjects(); renderAdminProducts(); }
+  if (!$('#adminPage')?.classList.contains('hidden')) { renderAdminProjects(); renderAdminProducts(); renderQrDatabase(); }
   renderCalendar();
   renderAdminProducts();
+  loadQrCodes().catch(error => toast('QR-Code-Datenbank konnte nicht geladen werden: ' + error.message));
 }
 
 function openDetail(id) {
@@ -676,6 +682,7 @@ function openProductDialog(productId = '') {
     $('#productWeight').value = product.weight || '';
     $('#productManufacturer').value = product.manufacturer || '';
     $('#productSerialNumber').value = product.serialNumber || '';
+    $('#productQrCode').value = product.qrCode || '';
     $('#productPurchaseDate').value = product.purchaseDate || '';
     $('#productDescription').value = product.description;
     $('#productNotes').value = product.notes;
@@ -683,6 +690,7 @@ function openProductDialog(productId = '') {
     $('#productImagePreview').innerHTML = image ? `<img src="${escapeHtml(image)}" alt="Vorschau"><span>Vorhandenes Foto</span>` : '<span>Foto hier ablegen oder auswählen</span>';
   } else {
     $('#productImagePreview').innerHTML = '<span>Foto hier ablegen oder auswählen</span>';
+    $('#productQrCode').value = '';
     $('#newProductIdPreview').textContent = 'Die Artikel-ID wird automatisch erzeugt.';
   }
   $('#productDialog').showModal();
@@ -806,10 +814,12 @@ async function submitProduct(event) {
     replacementValue: Number($('#productReplacementValue').value || 0),
     purchasePrice: Number($('#productPurchasePrice').value || 0), weight: $('#productWeight').value.trim(),
     manufacturer: $('#productManufacturer').value.trim(), serialNumber: $('#productSerialNumber').value.trim(),
+    qrCode: normalizeQrCode($('#productQrCode').value),
     purchaseDate: $('#productPurchaseDate').value, notes: $('#productNotes').value.trim(),
     productUrl: makeProductUrl(id), imageUrl: selectedProductImage?.existingUrl || existing?.imageUrl || ''
   });
   if (!product.name || !product.category || !product.location) return toast('Bitte Name, Kategorie und Standort ausfüllen.');
+  if ($('#productQrCode').value.trim() && !product.qrCode) return toast('Der QR-Code hat kein gültiges Format.');
   if (!Number.isInteger(product.total) || product.total < 1) return toast('Bitte eine gültige Menge eingeben.');
   const saveButton = $('#saveProductBtn');
   saveButton.disabled = true; saveButton.textContent = 'Wird gespeichert …';
@@ -950,6 +960,7 @@ async function openAdministration() {
   showPage('adminPage');
   renderAdminProjects();
   renderAdminProducts();
+  loadQrCodes().catch(error => toast('QR-Code-Datenbank konnte nicht geladen werden: ' + error.message));
 }
 async function submitAdminLogin(event) {
   event.preventDefault();
@@ -985,6 +996,9 @@ function bind() {
   });
   $('#addProjectBtn').onclick = openProjectDialog;
   $('#adminAddProductBtn').onclick = openProductDialog;
+  $('#scanProductQrBtn').onclick = openProductQrScanner;
+  $('#generateQrBatchBtn').onclick = generateQrBatch;
+  $('#downloadQrCsvBtn').onclick = downloadFreeQrCsv;
   $('#projectForm').onsubmit = submitProject;
   $('#calculationPreviewBtn').onclick = previewProjectCalculation;
   $('#calculationEmailBtn').onclick = emailProjectCalculation;
@@ -1101,8 +1115,15 @@ function setScannerStatus(message) {
   if (status) status.textContent = message;
 }
 
+function normalizeQrCode(value) {
+  const match = String(value || '').trim().toUpperCase().match(/CMEQR-\d{8,}/);
+  return match ? match[0] : '';
+}
+
 function extractArticleId(decodedText) {
   const text = String(decodedText || '').trim();
+  const qrCode = normalizeQrCode(text);
+  if (qrCode) return qrCode;
   const directId = text.match(/CME-[A-Z0-9]+-\d+/i);
   if (directId) return directId[0].toUpperCase();
   try {
@@ -1407,20 +1428,38 @@ function openReservationScanner() {
   $('#scanDialog').showModal();
 }
 
-function handleScannedArticle(id) {
+async function handleScannedArticle(id) {
   const normalizedId = String(id || '').trim().toUpperCase();
-  const product = catalog.find(item => String(item.id).toUpperCase() === normalizedId);
+  const qrCode = normalizeQrCode(normalizedId);
+  if (scanTarget === 'productQr') {
+    if (!qrCode) toast('Das ist kein gültiger Cocomac-QR-Code.');
+    else { $('#productQrCode').value = qrCode; toast(`${qrCode} wurde übernommen.`); }
+    scanTarget = 'detail';
+    if (productQrScanReturnDialog) { productQrScanReturnDialog.showModal(); productQrScanReturnDialog = null; }
+    return;
+  }
+  let productId = normalizedId;
+  if (qrCode) {
+    try {
+      const result = await sendCloudJsonpAction('resolveQrCode', { qrCode });
+      if (!result?.productId) throw new Error('Dieser QR-Code ist noch keinem Produkt zugeordnet.');
+      productId = String(result.productId).toUpperCase();
+    } catch (error) {
+      toast(error.message || 'QR-Code konnte nicht aufgelöst werden.');
+      if (scanTarget === 'reservation' && reservationScanSnapshot) restoreReservationAfterScan('');
+      return;
+    }
+  }
+  const product = catalog.find(item => String(item.id).toUpperCase() === productId);
   if (!product) {
-    toast(`Kein Produkt mit der Artikelnummer ${normalizedId} gefunden.`);
+    toast(`Kein Produkt mit der Artikelnummer ${productId} gefunden.`);
     if (scanTarget === 'reservation' && reservationScanSnapshot) restoreReservationAfterScan('');
     return;
   }
   if (scanTarget === 'reservation' && reservationScanSnapshot) {
     restoreReservationAfterScan(product.id);
     toast(`${product.name} wurde ausgewählt.`);
-  } else {
-    openDetail(product.id);
-  }
+  } else openDetail(product.id);
   scanTarget = 'detail';
 }
 
@@ -1634,6 +1673,65 @@ async function removeReservationFromProject() {
   }
 }
 
+
+
+function openProductQrScanner() {
+  productQrScanReturnDialog = $('#productDialog');
+  productQrScanReturnDialog.close();
+  scanTarget = 'productQr';
+  $('#manualId').value = '';
+  $('#scanDialog').showModal();
+  setScannerStatus('Scanne einen freien vorgedruckten Cocomac-QR-Code.');
+}
+
+async function loadQrCodes() {
+  const result = await sendCloudJsonpAction('listQrCodes', adminPayload({ limit: 250 }));
+  qrCodes = Array.isArray(result?.qrCodes) ? result.qrCodes : [];
+  renderQrDatabase();
+  return qrCodes;
+}
+
+function renderQrDatabase() {
+  const summary = $('#qrDatabaseSummary');
+  const wrap = $('#qrCodeList');
+  if (!summary || !wrap) return;
+  const free = qrCodes.filter(code => code.status === 'frei');
+  const assigned = qrCodes.filter(code => code.status === 'zugeordnet');
+  summary.textContent = `${qrCodes.length} zuletzt geladene Codes: ${free.length} frei, ${assigned.length} zugeordnet. Die Datenbank kann jederzeit weiter hochgezählt werden.`;
+  wrap.innerHTML = qrCodes.slice(0, 100).map(code => `<div class="admin-product-row"><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${escapeHtml(code.status)}${code.productId ? ` · ${escapeHtml(code.productId)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button></div></div>`).join('') || '<p>Noch keine QR-Codes erzeugt.</p>';
+  $$('[data-copy-qr]').forEach(button => button.onclick = async () => { await navigator.clipboard.writeText(button.dataset.copyQr); toast('QR-Code kopiert.'); });
+}
+
+async function generateQrBatch() {
+  if (!(await ensureAdminAccess())) return;
+  const count = Math.max(1, Math.min(1000, Math.round(Number($('#qrBatchCount').value || 100))));
+  const button = $('#generateQrBatchBtn');
+  button.disabled = true; button.textContent = 'Codes werden erzeugt …';
+  try {
+    const result = await sendCloudJsonpAction('generateQrCodes', adminPayload({ count }));
+    qrCodes = Array.isArray(result?.qrCodes) ? result.qrCodes : qrCodes;
+    renderQrDatabase();
+    downloadQrCsv(result?.created || []);
+    toast(`${Number(result?.created?.length || count)} neue QR-Codes wurden erzeugt.`);
+  } catch (error) { toast('QR-Codes konnten nicht erzeugt werden: ' + error.message); }
+  finally { button.disabled = false; button.textContent = 'QR-Codes erzeugen'; }
+}
+
+async function downloadFreeQrCsv() {
+  if (!(await ensureAdminAccess())) return;
+  try {
+    const result = await sendCloudJsonpAction('listQrCodes', adminPayload({ status: 'frei', limit: 5000 }));
+    downloadQrCsv(result?.qrCodes || []);
+  } catch (error) { toast('CSV konnte nicht erstellt werden: ' + error.message); }
+}
+
+function downloadQrCsv(codes) {
+  if (!Array.isArray(codes) || !codes.length) return toast('Es sind keine freien QR-Codes vorhanden.');
+  const rows = [['QR-Code','QR-Inhalt','Status'], ...codes.map(code => [code.qrCode, `${PRODUCT_URL_BASE}?qr=${encodeURIComponent(code.qrCode)}`, code.status || 'frei'])];
+  const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `cocomac-qr-codes-${new Date().toISOString().slice(0,10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
+}
 
 function renderAdminProjects() {
   const wrap = $('#adminProjectList');

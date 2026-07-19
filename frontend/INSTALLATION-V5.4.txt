@@ -1,0 +1,9 @@
+COCOMAC ESSENTIALS 5.4 – QR-CODE-DATENBANK
+
+1. Alle Frontend-Dateien in GitHub ersetzen.
+2. Code.gs durch die Version 5.4 ersetzen.
+3. setupCocomacEssentials einmal ausführen. Dadurch wird das Tabellenblatt „QR-Codes“ angelegt.
+4. Apps Script als neue Version bereitstellen.
+5. In Administration → QR-Code-Datenbank beliebig oft neue Chargen erzeugen.
+
+QR-Codes werden fortlaufend erzeugt, z. B. CMEQR-00000001. Die Datenbank endet nicht bei 500; neue Chargen zählen immer weiter.

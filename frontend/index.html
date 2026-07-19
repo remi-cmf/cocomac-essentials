@@ -97,6 +97,16 @@
         <div id="adminProjectList" class="admin-product-list"></div>
       </section>
       <section class="admin-section">
+        <div class="section-heading-inline"><div><h3>QR-Code-Datenbank</h3><p class="field-help">Erzeuge fortlaufend beliebig viele permanente Etiketten. Ein Code wird erst beim Produkt angelegt oder bearbeitet zugeordnet.</p></div></div>
+        <div class="qr-database-controls">
+          <label>Anzahl neuer QR-Codes<input id="qrBatchCount" type="number" min="1" max="1000" step="1" value="100"></label>
+          <button id="generateQrBatchBtn" type="button">QR-Codes erzeugen</button>
+          <button id="downloadQrCsvBtn" type="button" class="ghost">Freie Codes als CSV</button>
+        </div>
+        <div id="qrDatabaseSummary" class="admin-intro">QR-Code-Datenbank wird geladen …</div>
+        <div id="qrCodeList" class="admin-product-list"></div>
+      </section>
+      <section class="admin-section">
         <h3>Produkte verwalten</h3>
         <div id="adminProductList" class="admin-product-list"></div>
       </section>
@@ -323,6 +333,10 @@
         <label>Gewicht<input id="productWeight" placeholder="z. B. 4,2 kg"></label>
         <label>Hersteller<input id="productManufacturer" placeholder="optional"></label>
         <label>Seriennummer<input id="productSerialNumber" placeholder="optional"></label>
+        <label>QR-Code
+          <div class="input-with-button"><input id="productQrCode" placeholder="z. B. CMEQR-00000001" autocomplete="off"><button id="scanProductQrBtn" type="button" class="ghost">QR scannen</button></div>
+          <small class="field-help">Ein freier vorgedruckter Code kann gescannt oder eingetragen werden. Jeder Code darf nur einem Produkt gehören.</small>
+        </label>
         <label>Kaufdatum<input id="productPurchaseDate" type="date"></label>
       </div>
       <label>Beschreibung<textarea id="productDescription" placeholder="optional"></textarea></label>
@@ -490,6 +504,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=521" type="module"></script>
+  <script src="./app.js?v=54" type="module"></script>
 </body>
 </html>
