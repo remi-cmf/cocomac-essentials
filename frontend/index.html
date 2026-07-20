@@ -13,10 +13,19 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=592">
+  <link rel="stylesheet" href="./styles.css?v=593">
 </head>
 
 <body>
+  <div id="appSplash" class="app-splash" role="status" aria-live="polite">
+    <div class="app-splash-card">
+      <small>COCOMAC ESSENTIAL</small>
+      <div class="app-splash-mark">CME</div>
+      <h1>Equipment im Blick.</h1>
+      <p id="appSplashText">Daten werden verbunden …</p>
+      <div class="app-splash-progress"><span></span></div>
+    </div>
+  </div>
   <header class="topbar">
     <button id="homeBrandBtn" class="home-brand" type="button" aria-label="Cocomac Essential neu starten" title="Neu starten">
       <small>COCOMAC ESSENTIAL</small>
@@ -574,7 +583,7 @@
     <div id="equipmentCalendarContent"></div>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.2</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.3</div>
 
   <div
     id="toast"
@@ -583,6 +592,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=592" type="module"></script>
+  <script src="./app.js?v=593" type="module"></script>
 </body>
 </html>

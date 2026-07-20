@@ -1,0 +1,13 @@
+COCOMAC ESSENTIAL – VERSION 5.9.3
+
+Änderungen:
+- neuer Start- und Ladebildschirm
+- kompakter Buchungsdialog mit Projektname, Zeitraum und Monatskalender
+- Projektübersicht mit direkter Mengenänderung pro Equipment
+- Projektübersicht ohne Projektnummer und Ansprechpartner
+- navigierbare Kalender mit vorherigem und nächstem Monat
+- einheitlich große Frei-/Belegt-Felder
+- kompaktere Equipment-Darstellung
+
+Installation:
+Den Inhalt des Ordners frontend vollständig in das GitHub-Pages-Repository kopieren und vorhandene Dateien ersetzen.

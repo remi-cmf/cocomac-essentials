@@ -40,6 +40,7 @@ let productQrScanReturnDialog = null;
 let inventoryCounts = {};
 let calculationDirty = false;
 let qrDatabaseFilter = 'all';
+const calendarAnchors = new Map();
 
 
 const PRODUCT_CATEGORIES = Object.freeze([
@@ -65,6 +66,9 @@ function canonicalCategory(value) {
 }
 
 async function boot() {
+  const splash = $('#appSplash');
+  const splashText = $('#appSplashText');
+  if (splashText) splashText.textContent = 'Equipment und Projekte werden geladen …';
   // Google Sheets ist die zentrale Datenquelle. Die große lokale Importdatei
   // wird nicht mehr bei jedem Start heruntergeladen.
   baseCatalog = [];
@@ -73,6 +77,10 @@ async function boot() {
   await refreshCatalog();
   bind();
   render();
+  if (splashText) splashText.textContent = 'Alles bereit';
+  await new Promise(resolve => setTimeout(resolve, 220));
+  splash?.classList.add('is-finished');
+  setTimeout(() => splash?.remove(), 520);
   setupAutomaticCloudSync();
 
   if ('serviceWorker' in navigator) {
@@ -1464,7 +1472,7 @@ function renderProjects() {
   $('#projectList').innerHTML = projects.length ? projects.map(p=>{
     const rows=reservations.filter(r=>r.projectId===p.id && r.status!=='Storniert');
     const pieces=rows.reduce((s,r)=>s+r.quantity,0);
-    return `<article class="project-card" data-project-id="${escapeHtml(p.id)}"><div class="project-card-head"><span class="status-badge">${escapeHtml(p.status)}</span><small>${escapeHtml(p.number||p.id)}</small></div><h3>${escapeHtml(p.name)}</h3><p>${formatDate(p.start)} – ${formatDate(p.end)}</p><div class="meta">${rows.length} Artikelarten · ${pieces} Teile${p.contact?' · '+escapeHtml(p.contact):''}</div></article>`;
+    return `<article class="project-card" data-project-id="${escapeHtml(p.id)}"><div class="project-card-head"><span class="status-badge">${escapeHtml(p.status)}</span></div><h3>${escapeHtml(p.name)}</h3><p>${formatDate(p.start)} – ${formatDate(p.end)}</p><div class="meta">${rows.length} Artikelarten · ${pieces} Teile</div></article>`;
   }).join('') : '<div class="empty-state">Noch keine Projekte angelegt.</div>';
   $$('[data-project-id]').forEach(card=>card.onclick=()=>openProjectDetail(card.dataset.projectId));
 }
@@ -1592,6 +1600,7 @@ function openProjectDetail(projectId, refreshOnly = false) {
   const rows=projectReservations(p.id);
   const workflowStatus = projectWorkflowStatus(p);
   $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2>
+    <div class="project-period-hero"><small>PROJEKTZEITRAUM</small><b>${formatDate(p.start)} bis ${formatDate(p.end)}</b><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>
     ${buildProjectCalendarOverview(p, rows)}
     <div class="project-status-panel">
       <small>PROJEKTSTATUS</small>
@@ -1601,14 +1610,31 @@ function openProjectDetail(projectId, refreshOnly = false) {
         <button type="button" class="project-status-step ${workflowStatus==='Zurückgegeben'?'active':''}" data-project-status="Zurückgegeben"><span>3</span><b>Zurückgebracht</b><small>Equipment zurück im Lager</small></button>
       </div>
     </div>
-    <div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div><div><b>Projektnummer</b><br>${escapeHtml(p.number||p.id)}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+    <div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div>
+    <div class="project-equipment-heading"><div><small>EQUIPMENT</small><h3>${rows.length} Position${rows.length===1?'':'en'}</h3></div><span>Menge direkt anpassen</span></div>
+    <div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId); const image=productImageSource(item||{}); return `<article class="project-equipment-row"><button type="button" class="project-equipment-main" data-equipment-calendar="${escapeHtml(r.productId)}"><span class="project-equipment-image">${image?`<img src="${escapeHtml(image)}" alt="">`:'CME'}</span><span><b>${escapeHtml(item?.name||r.productId)}</b><small>${formatDate(r.from)}–${formatDate(r.to)}</small></span></button><div class="project-equipment-quantity"><button type="button" class="ghost" data-project-qty-minus="${escapeHtml(r.id)}" aria-label="Menge verringern">−</button><b>${r.quantity}</b><button type="button" data-project-qty-plus="${escapeHtml(r.id)}" aria-label="Menge erhöhen">+</button></div><button type="button" class="project-equipment-edit ghost" data-edit-reservation="${escapeHtml(r.id)}">Bearbeiten</button></article>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
   $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
   $$('[data-edit-reservation]').forEach(button => button.onclick = () => openReservationDialog(p.id, '', 'project', button.dataset.editReservation));
+  $$('[data-equipment-calendar]').forEach(button => button.onclick = () => openEquipmentCalendar(button.dataset.equipmentCalendar));
+  $$('[data-project-qty-minus]').forEach(button => button.onclick = () => adjustProjectReservationQuantity(button.dataset.projectQtyMinus, -1));
+  $$('[data-project-qty-plus]').forEach(button => button.onclick = () => adjustProjectReservationQuantity(button.dataset.projectQtyPlus, 1));
   $$('[data-project-status]').forEach(button => button.onclick = () => setProjectWorkflowStatus(p.id, button.dataset.projectStatus));
   $('#editProjectBtn').onclick=()=>{ $('#projectDetailDialog').close(); openProjectDialog(p.id); };
   $('#projectCalculationBtn').onclick=()=>openProjectCalculation(p.id);
+  bindCalendarNavigation($('#projectDetailContent'));
   if (!refreshOnly && !$('#projectDetailDialog').open) $('#projectDetailDialog').showModal();
 }
+
+async function adjustProjectReservationQuantity(reservationId, delta) {
+  const row=reservations.find(item=>item.id===reservationId); if(!row) return;
+  const max=Math.max(0, Number(availableFor(row.productId,row.from,row.to,row.id)||0));
+  const next=Math.max(1, Math.min(max || row.quantity, Number(row.quantity||1)+delta));
+  if(next===row.quantity) return toast(delta>0?'Für diesen Zeitraum ist kein weiteres Stück frei.':'Die Mindestmenge ist 1.');
+  const previous={...row}; row.quantity=next; render(); openProjectDetail(row.projectId,true);
+  try { if(settings().cloudMode) await sendCloudJsonpAction('saveReservation',row); toast(`Menge auf ${next} angepasst.`); }
+  catch(error){ Object.assign(row,previous); render(); openProjectDetail(row.projectId,true); toast('Menge konnte nicht gespeichert werden: '+error.message); }
+}
+
 function projectOptionLabel(project) {
   const number = project.number ? ` · ${project.number}` : '';
   return `${project.name}${number} (${formatDate(project.start)}–${formatDate(project.end)})`;
@@ -1713,33 +1739,14 @@ function updateReservationProjectInfo() {
   const projectId = $('#reservationProject')?.value || '';
   const project = projects.find(item => item.id === projectId);
   $('#reservationProjectId').value = projectId;
-
   if (!project) {
-    $('#reservationProjectInfo').innerHTML = projects.length
-      ? '<b>Bitte zuerst ein Projekt auswählen.</b><br><small>Danach werden Zeitraum, Ansprechpartner und Status automatisch übernommen.</small>'
-      : '<b>Noch kein Projekt vorhanden.</b><br><small>Lege zuerst im Bereich „Projekte“ ein Projekt an.</small>';
-    $('#reservationFrom').value = '';
-    $('#reservationTo').value = '';
-    updateReservationAvailability();
-    return;
+    $('#reservationProjectInfo').innerHTML = '<b>Projekt auswählen</b><br><small>Danach wird der Projektzeitraum übernommen.</small>';
+    $('#reservationFrom').value = ''; $('#reservationTo').value = ''; updateReservationAvailability(); return;
   }
-
-  if (!$('#reservationEditId').value) {
-    $('#reservationFrom').value = project.start;
-    $('#reservationTo').value = project.end;
-  }
-  const emails = [project.email1, project.email2].filter(Boolean).join(', ') || 'Keine E-Mail hinterlegt';
-  $('#reservationProjectInfo').innerHTML = `
-    <div class="reservation-project-head">
-      <div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b></div>
-      <span class="status-badge">${escapeHtml(project.status)}</span>
-    </div>
-    <div class="reservation-project-grid">
-      <div><small>Zeitraum</small><b>${project.start ? `${formatDate(project.start)}–${formatDate(project.end)}` : 'Kein Projektzeitraum'}</b></div>
-      <div><small>Ansprechpartner</small><b>${escapeHtml(project.contact || '–')}</b></div>
-      <div><small>E-Mail</small><b>${escapeHtml(emails)}</b></div>
-      <div><small>Bereits zugeordnet</small><b>${projectReservations(project.id).reduce((sum, row) => sum + row.quantity, 0)} Teile</b></div>
-    </div>`;
+  if (!$('#reservationEditId').value) { $('#reservationFrom').value = project.start; $('#reservationTo').value = project.end; }
+  const rows=projectReservations(project.id);
+  $('#reservationProjectInfo').innerHTML = `<div class="reservation-project-compact"><div><small>PROJEKT</small><b>${escapeHtml(project.name)}</b><span>${formatDate(project.start)} bis ${formatDate(project.end)}</span></div><span class="status-badge">${escapeHtml(project.status)}</span></div>${buildNavigableCalendar(`reservation-${project.id}`, project.start, rows, {start:project.start,end:project.end})}`;
+  bindCalendarNavigation($('#reservationProjectInfo'));
   updateReservationAvailability();
 }
 
@@ -2167,7 +2174,10 @@ function isoDate(date) {
   return `${y}-${m}-${d}`;
 }
 function monthTitle(date) { return new Intl.DateTimeFormat('de-DE',{month:'long',year:'numeric'}).format(date); }
-function calendarMonthHtml(anchorDate, bookingRows = [], highlightRange = null) {
+function shiftMonthIso(anchorDate, delta) {
+  const date=new Date(`${anchorDate||todayIso()}T12:00:00`); date.setDate(1); date.setMonth(date.getMonth()+delta); return isoDate(date);
+}
+function calendarMonthHtml(anchorDate, bookingRows = [], highlightRange = null, calendarKey = '') {
   const anchor = new Date(`${anchorDate || todayIso()}T12:00:00`);
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12);
   const start = new Date(first); start.setDate(first.getDate() - ((first.getDay()+6)%7));
@@ -2181,20 +2191,34 @@ function calendarMonthHtml(anchorDate, bookingRows = [], highlightRange = null) 
     const names=[...new Set(matching.map(r=>projects.find(p=>p.id===r.projectId)?.name).filter(Boolean))];
     cells.push(`<div class="${classes}" title="${escapeHtml(names.join(', '))}"><span>${day.getDate()}</span>${matching.length?'<i></i>':''}</div>`);
   }
-  return `<div class="mini-calendar"><div class="mini-calendar-head"><b>${escapeHtml(monthTitle(anchor))}</b><span><i></i> gebucht</span></div><div class="mini-calendar-weekdays">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<span>${d}</span>`).join('')}</div><div class="mini-calendar-grid">${cells.join('')}</div></div>`;
+  const nav=calendarKey?`<button type="button" class="calendar-month-nav ghost" data-calendar-key="${escapeHtml(calendarKey)}" data-calendar-direction="-1" aria-label="Vorheriger Monat">‹</button>`:'';
+  const nav2=calendarKey?`<button type="button" class="calendar-month-nav ghost" data-calendar-key="${escapeHtml(calendarKey)}" data-calendar-direction="1" aria-label="Nächster Monat">›</button>`:'';
+  return `<div class="mini-calendar" data-mini-calendar="${escapeHtml(calendarKey)}"><div class="mini-calendar-head">${nav}<div><b>${escapeHtml(monthTitle(anchor))}</b><span><i></i> gebucht</span></div>${nav2}</div><div class="mini-calendar-weekdays">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<span>${d}</span>`).join('')}</div><div class="mini-calendar-grid">${cells.join('')}</div></div>`;
+}
+function buildNavigableCalendar(key, defaultAnchor, rows, range=null){
+  if(!calendarAnchors.has(key)) calendarAnchors.set(key, defaultAnchor||todayIso());
+  return calendarMonthHtml(calendarAnchors.get(key),rows,range,key);
+}
+function bindCalendarNavigation(root=document){
+  root.querySelectorAll?.('[data-calendar-direction]').forEach(button=>button.onclick=()=>{
+    const key=button.dataset.calendarKey; calendarAnchors.set(key,shiftMonthIso(calendarAnchors.get(key)||todayIso(),Number(button.dataset.calendarDirection)));
+    if(key.startsWith('project-')) openProjectDetail(key.slice(8),true);
+    else if(key.startsWith('equipment-')) openEquipmentCalendar(key.slice(10),true);
+    else if(key.startsWith('reservation-')) updateReservationProjectInfo();
+  });
 }
 function buildProjectCalendarOverview(project, rows) {
-  const anchor=project.start || todayIso();
-  return `<section class="project-calendar-overview"><div class="project-calendar-heading"><div><small>ZEITRAUM AUF EINEN BLICK</small><b>${formatDate(project.start)} bis ${formatDate(project.end)}</b></div><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>${calendarMonthHtml(anchor, rows, {start:project.start,end:project.end})}</section>`;
+  return `<section class="project-calendar-overview"><div class="project-calendar-heading"><div><small>AUSLASTUNG</small><b>Monatsübersicht</b></div><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>${buildNavigableCalendar(`project-${project.id}`,project.start||todayIso(),rows,{start:project.start,end:project.end})}</section>`;
 }
-function openEquipmentCalendar(productId) {
+function openEquipmentCalendar(productId, refreshOnly=false) {
   const item=catalog.find(product=>product.id===productId); if(!item) return;
   const rows=reservations.filter(r=>r.productId===productId && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status)).sort((a,b)=>a.from.localeCompare(b.from));
-  const upcoming=rows.find(r=>r.to>=todayIso());
-  const anchor=upcoming?.from || todayIso();
+  const upcoming=rows.find(r=>r.to>=todayIso()); const key=`equipment-${productId}`;
+  if(!calendarAnchors.has(key)) calendarAnchors.set(key,upcoming?.from||todayIso());
   const bookings=rows.length?rows.map(r=>{const project=projects.find(p=>p.id===r.projectId);return `<div class="equipment-calendar-booking"><div><b>${escapeHtml(project?.name||'Unbekanntes Projekt')}</b><small>${formatDate(r.from)} bis ${formatDate(r.to)}</small></div><span>${r.quantity} Stück</span></div>`}).join(''):'<div class="empty-state">Für dieses Equipment gibt es keine aktive Buchung.</div>';
-  $('#equipmentCalendarContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(item.name)}</h2><p class="dialog-intro">${escapeHtml(item.id)} · Bestand ${item.total}</p>${calendarMonthHtml(anchor,rows)}<h3 class="equipment-calendar-subtitle">Aktive Buchungen</h3><div class="equipment-calendar-bookings">${bookings}</div>`;
-  $('#equipmentCalendarDialog').showModal();
+  $('#equipmentCalendarContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(item.name)}</h2><p class="dialog-intro">Bestand ${item.total}</p>${buildNavigableCalendar(key,calendarAnchors.get(key),rows)}<h3 class="equipment-calendar-subtitle">Aktive Buchungen</h3><div class="equipment-calendar-bookings">${bookings}</div>`;
+  bindCalendarNavigation($('#equipmentCalendarContent'));
+  if(!refreshOnly && !$('#equipmentCalendarDialog').open) $('#equipmentCalendarDialog').showModal();
 }
 
 function rentalDays(from, to) {
