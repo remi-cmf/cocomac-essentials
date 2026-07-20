@@ -1134,7 +1134,7 @@ function bind() {
   document.addEventListener('click', event => {
     if (!event.target.closest('.topbar-actions')) closeMainMenu();
   });
-  $('#addProjectBtn').onclick = openProjectDialog;
+  if ($('#adminAddProjectBtn')) $('#adminAddProjectBtn').onclick = () => openProjectDialog();
   $('#adminAddProductBtn').onclick = openProductDialog;
   $('#scanProductQrBtn').onclick = openProductQrScanner;
   $('#generateQrBatchBtn').onclick = generateQrBatch;
@@ -1192,6 +1192,7 @@ function bind() {
   $('#inventorySaveBtn').onclick = saveInventory;
   $('#calculationSaveTopBtn').onclick = saveProjectCalculation;
   $('#calculationSaveBottomBtn').onclick = saveProjectCalculation;
+  if ($('#calculationBulkBillingType')) $('#calculationBulkBillingType').onchange = applyBillingTypeToAll;
 
   $$('[data-close]').forEach(button => {
     button.onclick = async () => {
@@ -1557,7 +1558,7 @@ function projectReservations(projectId) { return reservations.filter(r=>r.projec
 function openProjectDetail(projectId) {
   const p=projects.find(x=>x.id===projectId); if(!p) return toast('Projekt nicht gefunden.'); activeProjectId=p.id;
   const rows=projectReservations(p.id);
-  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Projektkalkulation</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
   $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
   $$('[data-edit-reservation]').forEach(button => button.onclick = () => openReservationDialog(p.id, '', 'project', button.dataset.editReservation));
   $('#editProjectBtn').onclick=()=>{ $('#projectDetailDialog').close(); openProjectDialog(p.id); };
@@ -2085,8 +2086,15 @@ function renderCalendar() {
   const from=$('#calendarFrom').value,to=$('#calendarTo').value;
   if(to<from){$('#calendarSummary').innerHTML='<div class="banner demo">Bitte einen gültigen Zeitraum auswählen.</div>';return;}
   const rows=catalog.map(item=>{const reserved=reservedQuantity(item.id,from,to);return {...item,reserved,free:Math.max(0,item.total-reserved)}}).sort((a,b)=>a.free-b.free||a.name.localeCompare(b.name,'de'));
-  $('#calendarSummary').innerHTML=`<div class="banner">Verfügbarkeit vom <b>${formatDate(from)}</b> bis <b>${formatDate(to)}</b></div>`;
-  $('#availabilityList').innerHTML=rows.map(item=>`<div class="availability-row"><div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(item.id)} · Bestand ${item.total}</small></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count"><b>${item.reserved}</b><small>belegt</small></div></div>`).join('');
+  const fullyFree=rows.filter(item=>item.reserved===0).length;
+  const partlyUsed=rows.filter(item=>item.reserved>0&&item.free>0).length;
+  const fullyUsed=rows.filter(item=>item.free===0).length;
+  $('#calendarSummary').innerHTML=`<div class="calendar-result-summary"><div><small>GEPRÜFTER ZEITRAUM</small><b>${formatDate(from)} bis ${formatDate(to)}</b></div><div class="calendar-result-stats"><span><b>${fullyFree}</b> frei</span><span><b>${partlyUsed}</b> teilweise</span><span><b>${fullyUsed}</b> belegt</span></div></div>`;
+  $('#availabilityList').innerHTML=rows.map(item=>{
+    const stateClass=item.free===0?'unavailable':item.reserved===0?'available':'partial';
+    const image=productImageSource(item);
+    return `<article class="availability-row ${stateClass}">${image?`<img class="availability-image" src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">`:`<div class="availability-image placeholder">CME</div>`}<div class="availability-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · Bestand ${item.total}</small><div class="availability-meter"><span style="width:${item.total?Math.min(100,(item.reserved/item.total)*100):0}%"></span></div></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count occupied"><b>${item.reserved}</b><small>belegt</small></div></article>`;
+  }).join('');
   const relevant=reservations.filter(r=>r.status!=='Storniert'&&rangesOverlap(r.from,r.to,from,to)).sort((a,b)=>a.from.localeCompare(b.from));
   $('#calendarBookings').innerHTML=relevant.length?relevant.map(r=>{const p=projects.find(x=>x.id===r.projectId),item=catalog.find(x=>x.id===r.productId);return `<div class="timeline-item"><div class="timeline-date">${formatDate(r.from)}<br><small>bis ${formatDate(r.to)}</small></div><div><b>${escapeHtml(p?.name||r.projectId)}</b><br>${r.quantity} × ${escapeHtml(item?.name||r.productId)}<br><small>${escapeHtml(r.status)}</small></div></div>`}).join(''):'<div class="empty-state">Keine Buchungen in diesem Zeitraum.</div>';
 }
@@ -2158,6 +2166,7 @@ async function openProjectCalculation(projectId) {
   $('#calculationExtraLabel').value = activeCalculation.extraLabel || '';
   $('#calculationTaxMode').value = activeCalculation.taxMode || 'net';
   $('#calculationNote').value = activeCalculation.note || '';
+  if ($('#calculationBulkBillingType')) $('#calculationBulkBillingType').value = '';
   $('#calculationEmailTo').value = activeCalculation.emailTo;
   $('#calculationEmailCc').value = activeCalculation.emailCc || '';
   $('#calculationEmailSubject').value = activeCalculation.emailSubject;
@@ -2170,40 +2179,36 @@ async function openProjectCalculation(projectId) {
 
 function renderCalculationRows() {
   const wrap = $('#calculationRows');
-  wrap.innerHTML = activeCalculation.lines.length ? activeCalculation.lines.map((line,index)=>`
-    <div class="calculation-row" data-calculation-index="${index}">
-      <div class="product-cell"><b>${escapeHtml(line.name)}</b><br><small>${escapeHtml(line.productId)} · Bestand ${line.stock}<br>${formatDate(line.from)}–${formatDate(line.to)} · ${line.days} Tag${line.days===1?'':'e'}</small></div>
-      <label>Menge<input data-calc-field="quantity" type="number" min="0" step="1" value="${line.quantity}"></label>
-      <label>Abrechnung<select data-calc-field="billingType">
-        <option value="fixed" ${line.billingType==='fixed'?'selected':''}>Fixpreis</option>
-        <option value="daily" ${line.billingType==='daily'?'selected':''}>Tagespreis</option>
-        <option value="weekly" ${line.billingType==='weekly'?'selected':''}>Wochenpreis</option>
-        <option value="monthly" ${line.billingType==='monthly'?'selected':''}>Monatspreis</option>
-      </select></label>
-      <label><span data-price-label>${billingPriceLabel(line.billingType)}</span><input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
-      <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="1" inputmode="numeric" value="${Math.round(Number(line.discount || 0))}"></label>
-      <label class="checkbox-line"><input data-calc-field="free" type="checkbox" ${line.free?'checked':''}> Kostenlos</label>
-    </div>`).join('') : '<div class="empty-state">Noch kein Equipment im Projekt.</div>';
+  if ($('#calculationItemCount')) $('#calculationItemCount').textContent = `${activeCalculation.lines.length} Position${activeCalculation.lines.length===1?'':'en'}`;
+  wrap.innerHTML = activeCalculation.lines.length ? activeCalculation.lines.map((line,index)=>{
+    const product=catalog.find(item=>item.id===line.productId);
+    const image=product?productImageSource(product):'';
+    const lineTotal=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*billingUnits(line)*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
+    return `<article class="calculation-row" data-calculation-index="${index}">
+      <div class="calculation-product-head">${image?`<img src="${escapeHtml(image)}" alt="${escapeHtml(line.name)}">`:`<div class="calculation-product-placeholder">CME</div>`}<div><small>${escapeHtml(line.productId)}</small><h4>${escapeHtml(line.name)}</h4><span>Bestand ${line.stock} · ${formatDate(line.from)} bis ${formatDate(line.to)} · ${line.days} Tag${line.days===1?'':'e'}</span></div><div class="calculation-line-total"><small>Position</small><b data-line-total>${euro(lineTotal)}</b></div></div>
+      <div class="calculation-fields">
+        <label>Menge<input data-calc-field="quantity" type="number" min="0" step="1" value="${line.quantity}"></label>
+        <label>Preisart<select data-calc-field="billingType"><option value="fixed" ${line.billingType==='fixed'?'selected':''}>Fixpreis</option><option value="daily" ${line.billingType==='daily'?'selected':''}>Tagespreis</option><option value="weekly" ${line.billingType==='weekly'?'selected':''}>Wochenpreis</option><option value="monthly" ${line.billingType==='monthly'?'selected':''}>Monatspreis</option></select></label>
+        <label><span data-price-label>${billingPriceLabel(line.billingType)}</span><input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
+        <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="1" inputmode="numeric" value="${Math.round(Number(line.discount || 0))}"></label>
+        <label class="checkbox-line calculation-free"><input data-calc-field="free" type="checkbox" ${line.free?'checked':''}> Kostenlos</label>
+      </div>
+    </article>`;
+  }).join('') : '<div class="empty-state">Noch kein Equipment im Projekt.</div>';
   $$('[data-calculation-index]').forEach(row => {
     const index = Number(row.dataset.calculationIndex);
     row.querySelectorAll('[data-calc-field]').forEach(input => {
       input.oninput = input.onchange = () => {
         const field = input.dataset.calcField;
-        if (field === 'free') {
-          activeCalculation.lines[index][field] = input.checked;
-        } else if (field === 'billingType') {
-          activeCalculation.lines[index][field] = input.value;
-          const priceLabel = row.querySelector('[data-price-label]');
-          if (priceLabel) priceLabel.textContent = billingPriceLabel(input.value);
-        } else if (field === 'discount') {
-          const rounded = Math.min(100, Math.max(0, Math.round(Number(input.value || 0))));
-          input.value = String(rounded);
-          activeCalculation.lines[index][field] = rounded;
-        } else {
-          activeCalculation.lines[index][field] = Number(input.value || 0);
-        }
+        if (field === 'free') activeCalculation.lines[index][field] = input.checked;
+        else if (field === 'billingType') { activeCalculation.lines[index][field] = input.value; const priceLabel=row.querySelector('[data-price-label]'); if(priceLabel) priceLabel.textContent=billingPriceLabel(input.value); }
+        else if (field === 'discount') { const rounded=Math.min(100,Math.max(0,Math.round(Number(input.value||0)))); input.value=String(rounded); activeCalculation.lines[index][field]=rounded; }
+        else activeCalculation.lines[index][field]=Number(input.value||0);
         calculationDirty = true;
         setCalculationSaveStatus('Ungespeicherte Änderungen');
+        const line=activeCalculation.lines[index];
+        const total=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*billingUnits(line)*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
+        const totalEl=row.querySelector('[data-line-total]'); if(totalEl) totalEl.textContent=euro(total);
         updateCalculationTotal();
       };
     });
@@ -2211,6 +2216,17 @@ function renderCalculationRows() {
   updateCalculationTotal();
 }
 
+function applyBillingTypeToAll() {
+  const select=$('#calculationBulkBillingType');
+  const type=select?.value||'';
+  if(!type||!activeCalculation) return;
+  activeCalculation.lines.forEach(line=>{line.billingType=type;});
+  calculationDirty=true;
+  setCalculationSaveStatus('Ungespeicherte Änderungen');
+  renderCalculationRows();
+  select.value='';
+  toast(`${billingTypeLabel(type)} wurde für alle Positionen übernommen.`);
+}
 function mergeSavedCalculation(base, saved) {
   const savedLines = new Map((saved.lines || []).map(line => [line.reservationId || line.productId, line]));
   return {
@@ -2236,7 +2252,7 @@ async function saveProjectCalculation() {
     if (settings().cloudMode) await sendCloudJsonpAction('saveProjectCalculation', calculation, 30000);
     calculationDirty=false;
     setCalculationSaveStatus(`Gespeichert um ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`);
-    toast('Projektkalkulation wurde zwischengespeichert.');
+    toast('Buchungsüberblick wurde zwischengespeichert.');
   } catch(error) { setCalculationSaveStatus('Speichern fehlgeschlagen'); toast('Kalkulation konnte nicht gespeichert werden: '+error.message); }
   finally { buttons.forEach(button=>{button.disabled=false;button.textContent='Zwischenstand speichern';}); }
 }
@@ -2328,7 +2344,7 @@ function projectCalculationHtml(calculation) {
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}.pdf-actions{position:sticky;bottom:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:40px auto 0;padding:12px;width:fit-content;max-width:100%;background:rgba(255,255,255,.94);border:1px solid #ddd8cc;border-radius:22px;box-shadow:0 12px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.pdf-actions button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer}.pdf-primary{background:#171716;color:#fff;border:1px solid #171716}.pdf-secondary{background:#fff;color:#171716;border:1px solid #d8d4ca}@media(max-width:600px){body{padding:18px}.pdf-actions{width:100%;display:grid}.pdf-actions button{width:100%}}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print pdf-actions"><button class="pdf-primary" onclick="window.print()"><span>↓</span>Drucken / PDF sichern</button><button class="pdf-secondary" onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}"><span>←</span>Zurück zur Kalkulation</button></div></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}.pdf-actions{position:sticky;bottom:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:40px auto 0;padding:12px;width:fit-content;max-width:100%;background:rgba(255,255,255,.94);border:1px solid #ddd8cc;border-radius:22px;box-shadow:0 12px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.pdf-actions button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer}.pdf-primary{background:#171716;color:#fff;border:1px solid #171716}.pdf-secondary{background:#fff;color:#171716;border:1px solid #d8d4ca}@media(max-width:600px){body{padding:18px}.pdf-actions{width:100%;display:grid}.pdf-actions button{width:100%}}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print pdf-actions"><button class="pdf-primary" onclick="window.print()"><span>↓</span>Drucken / PDF sichern</button><button class="pdf-secondary" onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}"><span>←</span>Zurück zum Buchungsüberblick</button></div></body></html>`;
 }
 
 function previewProjectCalculation() {

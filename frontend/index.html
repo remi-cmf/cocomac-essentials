@@ -66,7 +66,6 @@
     <section id="projectsPage" class="app-page hidden">
       <div class="page-heading">
         <div><small>COCOMAC ESSENTIAL</small><h2>Projekte</h2></div>
-        <button id="addProjectBtn" type="button">+ Neues Projekt</button>
       </div>
       <section id="projectStats" class="stats"></section>
       <section id="projectList" class="project-grid"></section>
@@ -74,10 +73,17 @@
 
     <section id="calendarPage" class="app-page hidden">
       <div class="page-heading"><div><small>COCOMAC ESSENTIAL</small><h2>Verfügbarkeit</h2></div></div>
-      <div class="calendar-filter">
-        <label>Von<input id="calendarFrom" type="date"></label>
-        <label>Bis<input id="calendarTo" type="date"></label>
-        <button id="refreshCalendarBtn" type="button">Zeitraum prüfen</button>
+      <div class="calendar-panel">
+        <div class="calendar-panel-head">
+          <div><small>ZEITRAUM</small><h3>Verfügbarkeit prüfen</h3></div>
+          <span class="calendar-icon" aria-hidden="true">⌁</span>
+        </div>
+        <div class="calendar-filter">
+          <label><span>Von</span><input id="calendarFrom" type="date"></label>
+          <div class="calendar-range-arrow" aria-hidden="true">→</div>
+          <label><span>Bis</span><input id="calendarTo" type="date"></label>
+          <button id="refreshCalendarBtn" type="button">Zeitraum prüfen</button>
+        </div>
       </div>
       <div id="calendarSummary"></div>
       <div id="availabilityList" class="availability-list"></div>
@@ -120,8 +126,10 @@
       </section>
       <section id="projectsModule" class="admin-section admin-module-panel hidden">
         <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
-        <h3>Projekte verwalten</h3>
-        <p class="field-help">Projekte können ausschließlich hier gelöscht werden.</p>
+        <div class="section-heading-inline">
+          <div><h3>Projekte verwalten</h3><p class="field-help">Neue Projekte werden ausschließlich hier angelegt. Bestehende Projekte können bearbeitet oder gelöscht werden.</p></div>
+          <button id="adminAddProjectBtn" type="button">+ Neues Projekt</button>
+        </div>
         <div id="adminProjectList" class="admin-product-list"></div>
       </section>
       <section id="qrModule" class="admin-section admin-module-panel hidden">
@@ -521,10 +529,21 @@
     <form id="projectCalculationForm">
       <input id="calculationProjectId" type="hidden">
       <small>COCOMAC ESSENTIAL</small>
-      <h2>Projektkalkulation</h2>
+      <h2>Buchungsüberblick</h2>
       <p class="dialog-intro">Passe Preise und Sonderkonditionen nur für dieses Projekt an. Die Stammpreise des Equipments bleiben unverändert.</p>
       <div class="calculation-save-bar calculation-save-bar-top"><button id="calculationSaveTopBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusTop" class="meta"></span></div>
       <div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <div class="calculation-bulk-panel">
+        <div><small>ALLE POSITIONEN</small><b>Preisart gesammelt festlegen</b><span>Die Auswahl wird auf das gesamte Equipment dieser Buchung angewendet.</span></div>
+        <label>Preisart für alle<select id="calculationBulkBillingType">
+          <option value="">Nicht ändern</option>
+          <option value="fixed">Fixpreis</option>
+          <option value="daily">Tagespreis</option>
+          <option value="weekly">Wochenpreis</option>
+          <option value="monthly">Monatspreis</option>
+        </select></label>
+      </div>
+      <div class="calculation-section-heading"><div><small>EQUIPMENT</small><h3>Gebuchte Positionen</h3></div><span id="calculationItemCount" class="calculation-count"></span></div>
       <div id="calculationRows" class="calculation-rows"></div>
       <div class="form-columns">
         <label>Gesamtrabatt in %<input id="calculationDiscount" type="number" min="0" max="100" step="1" inputmode="numeric" value="0"></label>
@@ -551,7 +570,7 @@
     </form>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.8.5</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.0</div>
 
   <div
     id="toast"
@@ -560,6 +579,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=585" type="module"></script>
+  <script src="./app.js?v=590" type="module"></script>
 </body>
 </html>
