@@ -1481,7 +1481,7 @@ function openProjectDialog(projectId = '') {
     $('#projectContact').value = project.contact;
     $('#projectEmail1').value = project.email1;
     $('#projectEmail2').value = project.email2;
-    $('#projectStatus').value = project.status;
+    $('#projectStatus').value = project.status || 'Reserviert';
     $('#projectStart').value = project.start;
     $('#projectEnd').value = project.end;
     $('#projectNotes').value = project.notes;
@@ -1538,7 +1538,7 @@ async function submitProject(event) {
   const editId = $('#projectEditId').value;
   const existing = projects.find(item => item.id === editId);
   const generatedNumber = existing?.number || existing?.id || nextProjectNumber($('#projectName').value.trim(), $('#projectStart').value);
-  const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:$('#projectStatus').value, notes:$('#projectNotes').value.trim() });
+  const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:existing?.status || $('#projectStatus').value || 'Reserviert', notes:$('#projectNotes').value.trim() });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   const previousProjects = [...projects];
@@ -1555,15 +1555,60 @@ async function submitProject(event) {
   }
 }
 function projectReservations(projectId) { return reservations.filter(r=>r.projectId===projectId && r.status!=='Storniert'); }
-function openProjectDetail(projectId) {
+function projectWorkflowStatus(project) {
+  const value = String(project?.status || 'Reserviert');
+  if (value === 'Ausgegeben') return 'Ausgegeben';
+  if (['Zurückgegeben','Abgeschlossen'].includes(value)) return 'Zurückgegeben';
+  return 'Reserviert';
+}
+
+async function setProjectWorkflowStatus(projectId, nextStatus) {
+  const project = projects.find(item => item.id === projectId);
+  if (!project || !['Reserviert','Ausgegeben','Zurückgegeben'].includes(nextStatus)) return;
+  const previousProject = {...project};
+  const previousReservations = reservations.map(item => ({...item}));
+  project.status = nextStatus;
+  reservations = reservations.map(item => item.projectId === projectId && !['Storniert','Defekt'].includes(item.status)
+    ? normalizeReservation({...item, status: nextStatus})
+    : item);
+  render();
+  if ($('#projectDetailDialog')?.open) openProjectDetail(projectId, true);
+  toast(`Projektstatus auf „${nextStatus}“ gesetzt. Synchronisierung läuft.`);
+  try {
+    if (settings().cloudMode) {
+      await sendCloudJsonpAction('saveProject', project);
+      const changed = reservations.filter(item => item.projectId === projectId && !['Storniert','Defekt'].includes(item.status));
+      for (const reservation of changed) await sendCloudJsonpAction('saveReservation', reservation);
+    }
+  } catch (error) {
+    Object.assign(project, previousProject);
+    reservations = previousReservations;
+    render();
+    if ($('#projectDetailDialog')?.open) openProjectDetail(projectId, true);
+    toast('Status konnte nicht synchronisiert werden: ' + error.message);
+  }
+}
+
+function openProjectDetail(projectId, refreshOnly = false) {
   const p=projects.find(x=>x.id===projectId); if(!p) return toast('Projekt nicht gefunden.'); activeProjectId=p.id;
   const rows=projectReservations(p.id);
-  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2><div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Status</b><br>${escapeHtml(p.status)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
+  const workflowStatus = projectWorkflowStatus(p);
+  $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2>
+    <div class="project-status-panel">
+      <small>PROJEKTSTATUS</small>
+      <div class="project-status-steps">
+        <button type="button" class="project-status-step ${workflowStatus==='Reserviert'?'active':''}" data-project-status="Reserviert"><span>1</span><b>Reserviert</b><small>Equipment eingeplant</small></button>
+        <button type="button" class="project-status-step ${workflowStatus==='Ausgegeben'?'active':''}" data-project-status="Ausgegeben"><span>2</span><b>Abgeholt</b><small>Equipment ausgegeben</small></button>
+        <button type="button" class="project-status-step ${workflowStatus==='Zurückgegeben'?'active':''}" data-project-status="Zurückgegeben"><span>3</span><b>Zurückgebracht</b><small>Equipment zurück im Lager</small></button>
+      </div>
+    </div>
+    <div class="project-meta-grid"><div><b>Zeitraum</b><br>${formatDate(p.start)} – ${formatDate(p.end)}</div><div><b>Ansprechpartner</b><br>${escapeHtml(p.contact||'–')}</div><div><b>E-Mail</b><br>${escapeHtml([p.email1,p.email2].filter(Boolean).join(', ')||'–')}</div><div><b>Projektnummer</b><br>${escapeHtml(p.number||p.id)}</div></div>${p.notes?`<p>${escapeHtml(p.notes)}</p>`:''}<div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div><div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId);return `<button type="button" class="booking-row booking-row-button" data-edit-reservation="${escapeHtml(r.id)}"><div><b>${r.quantity} × ${escapeHtml(item?.name||r.productId)}</b><br><small>${escapeHtml(r.productId)} · ${formatDate(r.from)}–${formatDate(r.to)}</small></div><div class="booking-row-side"><span class="status-badge">${escapeHtml(r.status)}</span><small>Bearbeiten</small></div></button>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
   $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
   $$('[data-edit-reservation]').forEach(button => button.onclick = () => openReservationDialog(p.id, '', 'project', button.dataset.editReservation));
+  $$('[data-project-status]').forEach(button => button.onclick = () => setProjectWorkflowStatus(p.id, button.dataset.projectStatus));
   $('#editProjectBtn').onclick=()=>{ $('#projectDetailDialog').close(); openProjectDialog(p.id); };
   $('#projectCalculationBtn').onclick=()=>openProjectCalculation(p.id);
-  $('#projectDetailDialog').showModal();
+  if (!refreshOnly && !$('#projectDetailDialog').open) $('#projectDetailDialog').showModal();
 }
 function projectOptionLabel(project) {
   const number = project.number ? ` · ${project.number}` : '';
@@ -1931,17 +1976,28 @@ function downloadQrCsv(codes) {
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `cocomac-qr-codes-${new Date().toISOString().slice(0,10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
 }
 
+function projectShortCode(project) {
+  const number = String(project?.number || project?.id || '');
+  const match = number.match(/^CME-([A-Z0-9]+)-/i);
+  return (match?.[1] || projectNameCode(project?.name || '') || 'PRJ').toUpperCase();
+}
+
 function renderAdminProjects() {
   const wrap = $('#adminProjectList');
   if (!wrap) return;
   const sorted = projects.slice().sort((a,b) => String(b.start).localeCompare(String(a.start)));
   wrap.innerHTML = sorted.length ? sorted.map(project => {
     const linked = reservations.filter(item => item.projectId === project.id && item.status !== 'Storniert');
-    return `<div class="admin-product-row admin-project-row">
-      <div class="admin-project-icon">CME</div>
-      <div><b>${escapeHtml(project.name)}</b><br><small>${escapeHtml(project.number || project.id)} · ${formatDate(project.start)}–${formatDate(project.end)} · ${linked.length} Buchungen</small></div>
+    const pieces = linked.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    return `<article class="admin-project-card">
+      <div class="admin-project-icon">${escapeHtml(projectShortCode(project))}</div>
+      <div class="admin-project-copy">
+        <div class="admin-project-title"><b>${escapeHtml(project.name)}</b><span class="status-badge">${escapeHtml(project.status || 'Reserviert')}</span></div>
+        <small>${escapeHtml(project.number || project.id)}</small>
+        <div class="admin-project-facts"><span>${formatDate(project.start)}–${formatDate(project.end)}</span><span>${linked.length} Buchungen</span><span>${pieces} Teile</span></div>
+      </div>
       <div class="admin-row-actions"><button type="button" class="ghost" data-admin-edit-project="${escapeHtml(project.id)}">Bearbeiten</button><button type="button" class="danger" data-admin-delete-project="${escapeHtml(project.id)}">Löschen</button></div>
-    </div>`;
+    </article>`;
   }).join('') : '<div class="empty-state">Keine Projekte vorhanden.</div>';
   $$('[data-admin-edit-project]').forEach(button => button.onclick = () => openProjectDialog(button.dataset.adminEditProject));
   $$('[data-admin-delete-project]').forEach(button => button.onclick = () => deleteProject(button.dataset.adminDeleteProject));
@@ -2085,7 +2141,13 @@ function renderCalendar() {
   if(!$('#calendarTo').value) $('#calendarTo').value=addDaysIso(14);
   const from=$('#calendarFrom').value,to=$('#calendarTo').value;
   if(to<from){$('#calendarSummary').innerHTML='<div class="banner demo">Bitte einen gültigen Zeitraum auswählen.</div>';return;}
-  const rows=catalog.map(item=>{const reserved=reservedQuantity(item.id,from,to);return {...item,reserved,free:Math.max(0,item.total-reserved)}}).sort((a,b)=>a.free-b.free||a.name.localeCompare(b.name,'de'));
+  const activeRows = reservations.filter(r => !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status) && rangesOverlap(r.from,r.to,from,to));
+  const rows=catalog.map(item=>{
+    const productReservations = activeRows.filter(r => r.productId === item.id);
+    const reserved = productReservations.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+    const projectNames = [...new Set(productReservations.map(r => projects.find(p => p.id === r.projectId)?.name || '').filter(Boolean))];
+    return {...item,reserved,free:Math.max(0,item.total-reserved),projectNames};
+  }).sort((a,b)=>a.free-b.free||a.name.localeCompare(b.name,'de'));
   const fullyFree=rows.filter(item=>item.reserved===0).length;
   const partlyUsed=rows.filter(item=>item.reserved>0&&item.free>0).length;
   const fullyUsed=rows.filter(item=>item.free===0).length;
@@ -2093,9 +2155,10 @@ function renderCalendar() {
   $('#availabilityList').innerHTML=rows.map(item=>{
     const stateClass=item.free===0?'unavailable':item.reserved===0?'available':'partial';
     const image=productImageSource(item);
-    return `<article class="availability-row ${stateClass}">${image?`<img class="availability-image" src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">`:`<div class="availability-image placeholder">CME</div>`}<div class="availability-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · Bestand ${item.total}</small><div class="availability-meter"><span style="width:${item.total?Math.min(100,(item.reserved/item.total)*100):0}%"></span></div></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count occupied"><b>${item.reserved}</b><small>belegt</small></div></article>`;
+    const projectInfo=item.projectNames.length?`<div class="availability-projects"><small>Belegt bei</small><b>${item.projectNames.map(escapeHtml).join(' · ')}</b></div>`:'';
+    return `<article class="availability-row ${stateClass}"><div class="availability-image-wrap">${image?`<img class="availability-image" src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">`:`<div class="availability-image placeholder">CME</div>`}</div><div class="availability-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · Bestand ${item.total}</small>${projectInfo}<div class="availability-meter"><span style="width:${item.total?Math.min(100,(item.reserved/item.total)*100):0}%"></span></div></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count occupied"><b>${item.reserved}</b><small>belegt</small></div></article>`;
   }).join('');
-  const relevant=reservations.filter(r=>r.status!=='Storniert'&&rangesOverlap(r.from,r.to,from,to)).sort((a,b)=>a.from.localeCompare(b.from));
+  const relevant=activeRows.sort((a,b)=>a.from.localeCompare(b.from));
   $('#calendarBookings').innerHTML=relevant.length?relevant.map(r=>{const p=projects.find(x=>x.id===r.projectId),item=catalog.find(x=>x.id===r.productId);return `<div class="timeline-item"><div class="timeline-date">${formatDate(r.from)}<br><small>bis ${formatDate(r.to)}</small></div><div><b>${escapeHtml(p?.name||r.projectId)}</b><br>${r.quantity} × ${escapeHtml(item?.name||r.productId)}<br><small>${escapeHtml(r.status)}</small></div></div>`}).join(''):'<div class="empty-state">Keine Buchungen in diesem Zeitraum.</div>';
 }
 function rentalDays(from, to) {

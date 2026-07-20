@@ -1,0 +1,22 @@
+COCOMAC ESSENTIAL – VERSION 5.9.1
+
+ÄNDERUNGEN
+- Kalenderbereich vollständig neu gestaltet.
+- Zeitraumsauswahl als kompakte Karte mit übersichtlicher Zusammenfassung.
+- Verfügbarkeitskarten mit Produktbild, Bestandsbalken und Statusdarstellung.
+- Neue Projekte können nur noch in Administration > Projekte verwalten angelegt werden.
+- Projektkalkulation wurde in „Buchungsüberblick“ umbenannt.
+- Equipment im Buchungsüberblick wird als übersichtliche Einzelkarten dargestellt.
+- Preisart kann pro Position oder gesammelt für alle Positionen festgelegt werden.
+- Positionssummen werden direkt an jeder Equipmentkarte angezeigt.
+
+INSTALLATION FRONTEND
+1. Den Inhalt des Ordners frontend vollständig in das GitHub-Repository kopieren.
+2. Vorhandene Dateien ersetzen.
+3. Änderungen committen und GitHub Pages neu ausrollen lassen.
+4. App auf dem iPhone vollständig schließen und erneut öffnen.
+5. Falls weiterhin die alte Version erscheint, Website-Daten bzw. PWA-Cache löschen.
+
+GOOGLE APPS SCRIPT
+Für diese Version ist keine Änderung am Apps-Script-Backend erforderlich.
+Der bisherige Code kann unverändert weiterverwendet werden.

@@ -379,7 +379,7 @@ textarea { resize: vertical; }
 
 .home-brand{transition:opacity .16s ease,transform .16s ease}.home-brand:hover{opacity:.82}.home-brand:active{opacity:.58;transform:translateY(1px)}
 
-/* Version 5.9.0: Kalender und Buchungsüberblick */
+/* Version 5.9.1: Kalender und Buchungsüberblick */
 .calendar-panel{width:min(760px,100%);margin:18px auto 16px;padding:20px;background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 10px 35px rgba(23,23,22,.05)}
 .calendar-panel-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
 .calendar-panel-head small,.calculation-section-heading small,.calculation-bulk-panel small{display:block;color:var(--muted);font-size:.72rem;font-weight:800;letter-spacing:.14em}
@@ -454,4 +454,45 @@ textarea { resize: vertical; }
   .calculation-line-total{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:9px 0 0;border-top:1px solid var(--line);text-align:left}
   .calculation-fields{grid-template-columns:1fr 1fr;padding:13px}
   .calculation-free{grid-column:1/-1;margin-top:0}
+}
+
+/* Version 5.9.1: Kalenderbilder, Projektstatus und Projektverwaltung */
+.availability-image-wrap{display:grid;place-items:center;width:58px;height:58px;padding:5px;border-radius:15px;background:#fff;border:1px solid #efede6;overflow:hidden}
+.availability-image{width:100%!important;height:100%!important;object-fit:contain!important;border-radius:10px!important;background:#fff!important}
+.availability-image.placeholder{width:100%!important;height:100%!important;border:0;background:#f2f0e9!important}
+.availability-projects{margin-top:8px;padding:7px 9px;border-radius:10px;background:#f6eee9;color:#7d3535;line-height:1.25}
+.availability-projects small,.availability-projects b{display:block}
+.availability-projects small{margin:0 0 2px!important;font-size:.62rem!important;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:#a16a6a!important}
+.availability-projects b{font-size:.76rem;overflow-wrap:anywhere}
+
+.admin-project-card{display:grid;grid-template-columns:74px minmax(0,1fr) auto;align-items:center;gap:15px;padding:16px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 7px 22px rgba(23,23,22,.04)}
+.admin-project-icon{width:64px;height:64px;border-radius:18px;font-size:1rem;letter-spacing:.08em}
+.admin-project-copy{min-width:0}
+.admin-project-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.admin-project-title>b{font-size:1.05rem;overflow-wrap:anywhere}
+.admin-project-copy>small{display:block;color:var(--muted);overflow-wrap:anywhere}
+.admin-project-facts{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.admin-project-facts span{padding:5px 8px;border-radius:999px;background:#f2f0e9;color:var(--muted);font-size:.7rem;font-weight:750}
+.admin-project-card .admin-row-actions{display:grid;gap:7px;min-width:125px}
+
+.project-status-panel{margin:18px 0;padding:17px;border-radius:22px;background:#171716;color:#fff}
+.project-status-panel>small{display:block;margin-bottom:11px;color:#bdbab2;font-size:.7rem;font-weight:850;letter-spacing:.14em}
+.project-status-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.project-status-step{display:grid;grid-template-columns:34px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:9px;padding:11px;text-align:left;border:1px solid #4a4945;border-radius:16px;background:#292825;color:#fff}
+.project-status-step>span{grid-row:1/3;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#45443f;font-weight:900}
+.project-status-step>b{font-size:.86rem}
+.project-status-step>small{color:#aaa79f;font-size:.66rem;line-height:1.2}
+.project-status-step.active{background:#e6f0eb;color:#176b4b;border-color:#e6f0eb}
+.project-status-step.active>span{background:#176b4b;color:#fff}
+.project-status-step.active>small{color:#4e7e69}
+
+@media(max-width:700px){
+  .availability-image-wrap{width:48px;height:48px;padding:4px;border-radius:13px}
+  .availability-projects{padding:6px 7px}
+  .admin-project-card{grid-template-columns:58px minmax(0,1fr);gap:11px;padding:14px}
+  .admin-project-icon{width:52px;height:52px;border-radius:14px;font-size:.82rem}
+  .admin-project-title{align-items:flex-start;flex-direction:column;gap:5px}
+  .admin-project-card .admin-row-actions{grid-column:1/-1;grid-template-columns:1fr 1fr;min-width:0}
+  .project-status-steps{grid-template-columns:1fr}
+  .project-status-step{grid-template-columns:38px minmax(0,1fr)}
 }
