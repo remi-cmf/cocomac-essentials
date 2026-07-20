@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=585">
+  <link rel="stylesheet" href="./styles.css?v=592">
 </head>
 
 <body>
@@ -39,7 +39,7 @@
 
   <main>
     <section id="syncBanner" class="banner">
-      Synchronisierung wird verbunden …
+      Verbinden …
     </section>
 
 
@@ -67,7 +67,7 @@
       <div class="page-heading">
         <div><small>COCOMAC ESSENTIAL</small><h2>Projekte</h2></div>
       </div>
-      <section id="projectStats" class="stats"></section>
+      
       <section id="projectList" class="project-grid"></section>
     </section>
 
@@ -87,8 +87,7 @@
       </div>
       <div id="calendarSummary"></div>
       <div id="availabilityList" class="availability-list"></div>
-      <h3 class="section-title">Buchungen im Zeitraum</h3>
-      <div id="calendarBookings" class="timeline"></div>
+      <details class="calendar-bookings-details"><summary>Buchungen im Zeitraum anzeigen</summary><div id="calendarBookings" class="timeline"></div></details>
     </section>
 
     <section id="adminPage" class="app-page hidden">
@@ -570,7 +569,12 @@
     </form>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.1</div>
+  <dialog id="equipmentCalendarDialog" class="wide-dialog equipment-calendar-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <div id="equipmentCalendarContent"></div>
+  </dialog>
+
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.2</div>
 
   <div
     id="toast"
@@ -579,6 +583,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=590" type="module"></script>
+  <script src="./app.js?v=592" type="module"></script>
 </body>
 </html>

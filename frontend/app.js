@@ -1461,8 +1461,6 @@ function showPage(pageId) {
 }
 function renderProjects() {
   if(!$('#projectList')) return;
-  const active=projects.filter(p=>!['Abgeschlossen','Zurückgegeben'].includes(p.status)).length;
-  $('#projectStats').innerHTML = [['Projekte',projects.length],['Aktiv',active],['Reservierungen',reservations.filter(r=>r.status==='Reserviert').length],['Ausgegeben',reservations.filter(r=>r.status==='Ausgegeben').length]].map(([l,v])=>`<div class="stat"><strong>${v}</strong><span>${l}</span></div>`).join('');
   $('#projectList').innerHTML = projects.length ? projects.map(p=>{
     const rows=reservations.filter(r=>r.projectId===p.id && r.status!=='Storniert');
     const pieces=rows.reduce((s,r)=>s+r.quantity,0);
@@ -1594,6 +1592,7 @@ function openProjectDetail(projectId, refreshOnly = false) {
   const rows=projectReservations(p.id);
   const workflowStatus = projectWorkflowStatus(p);
   $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2>
+    ${buildProjectCalendarOverview(p, rows)}
     <div class="project-status-panel">
       <small>PROJEKTSTATUS</small>
       <div class="project-status-steps">
@@ -2156,11 +2155,48 @@ function renderCalendar() {
     const stateClass=item.free===0?'unavailable':item.reserved===0?'available':'partial';
     const image=productImageSource(item);
     const projectInfo=item.projectNames.length?`<div class="availability-projects"><small>Belegt bei</small><b>${item.projectNames.map(escapeHtml).join(' · ')}</b></div>`:'';
-    return `<article class="availability-row ${stateClass}"><div class="availability-image-wrap">${image?`<img class="availability-image" src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">`:`<div class="availability-image placeholder">CME</div>`}</div><div class="availability-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · Bestand ${item.total}</small>${projectInfo}<div class="availability-meter"><span style="width:${item.total?Math.min(100,(item.reserved/item.total)*100):0}%"></span></div></div><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count occupied"><b>${item.reserved}</b><small>belegt</small></div></article>`;
+    return `<button type="button" class="availability-row ${stateClass}" data-equipment-calendar="${escapeHtml(item.id)}"><div class="availability-image-wrap">${image?`<img class="availability-image" src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}">`:`<div class="availability-image placeholder">CME</div>`}</div><div class="availability-main"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.id)} · Bestand ${item.total}</small>${projectInfo}<div class="availability-meter"><span style="width:${item.total?Math.min(100,(item.reserved/item.total)*100):0}%"></span></div></div><div class="availability-counts"><div class="availability-count ${item.free===0?'none':''}"><b>${item.free}</b><small>frei</small></div><div class="availability-count occupied"><b>${item.reserved}</b><small>belegt</small></div></div></button>`;
   }).join('');
+  $$('[data-equipment-calendar]').forEach(row => row.onclick = () => openEquipmentCalendar(row.dataset.equipmentCalendar));
   const relevant=activeRows.sort((a,b)=>a.from.localeCompare(b.from));
   $('#calendarBookings').innerHTML=relevant.length?relevant.map(r=>{const p=projects.find(x=>x.id===r.projectId),item=catalog.find(x=>x.id===r.productId);return `<div class="timeline-item"><div class="timeline-date">${formatDate(r.from)}<br><small>bis ${formatDate(r.to)}</small></div><div><b>${escapeHtml(p?.name||r.projectId)}</b><br>${r.quantity} × ${escapeHtml(item?.name||r.productId)}<br><small>${escapeHtml(r.status)}</small></div></div>`}).join(''):'<div class="empty-state">Keine Buchungen in diesem Zeitraum.</div>';
 }
+
+function isoDate(date) {
+  const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,'0'), d=String(date.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+function monthTitle(date) { return new Intl.DateTimeFormat('de-DE',{month:'long',year:'numeric'}).format(date); }
+function calendarMonthHtml(anchorDate, bookingRows = [], highlightRange = null) {
+  const anchor = new Date(`${anchorDate || todayIso()}T12:00:00`);
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12);
+  const start = new Date(first); start.setDate(first.getDate() - ((first.getDay()+6)%7));
+  const cells=[];
+  for(let i=0;i<42;i++){
+    const day=new Date(start); day.setDate(start.getDate()+i); const iso=isoDate(day);
+    const current=day.getMonth()===anchor.getMonth();
+    const matching=bookingRows.filter(r=>rangesOverlap(r.from,r.to,iso,iso));
+    const highlighted=highlightRange && rangesOverlap(highlightRange.start,highlightRange.end,iso,iso);
+    const classes=['mini-calendar-day',current?'current':'outside',matching.length?'booked':'',highlighted?'project-day':'',iso===todayIso()?'today':''].filter(Boolean).join(' ');
+    const names=[...new Set(matching.map(r=>projects.find(p=>p.id===r.projectId)?.name).filter(Boolean))];
+    cells.push(`<div class="${classes}" title="${escapeHtml(names.join(', '))}"><span>${day.getDate()}</span>${matching.length?'<i></i>':''}</div>`);
+  }
+  return `<div class="mini-calendar"><div class="mini-calendar-head"><b>${escapeHtml(monthTitle(anchor))}</b><span><i></i> gebucht</span></div><div class="mini-calendar-weekdays">${['Mo','Di','Mi','Do','Fr','Sa','So'].map(d=>`<span>${d}</span>`).join('')}</div><div class="mini-calendar-grid">${cells.join('')}</div></div>`;
+}
+function buildProjectCalendarOverview(project, rows) {
+  const anchor=project.start || todayIso();
+  return `<section class="project-calendar-overview"><div class="project-calendar-heading"><div><small>ZEITRAUM AUF EINEN BLICK</small><b>${formatDate(project.start)} bis ${formatDate(project.end)}</b></div><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>${calendarMonthHtml(anchor, rows, {start:project.start,end:project.end})}</section>`;
+}
+function openEquipmentCalendar(productId) {
+  const item=catalog.find(product=>product.id===productId); if(!item) return;
+  const rows=reservations.filter(r=>r.productId===productId && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status)).sort((a,b)=>a.from.localeCompare(b.from));
+  const upcoming=rows.find(r=>r.to>=todayIso());
+  const anchor=upcoming?.from || todayIso();
+  const bookings=rows.length?rows.map(r=>{const project=projects.find(p=>p.id===r.projectId);return `<div class="equipment-calendar-booking"><div><b>${escapeHtml(project?.name||'Unbekanntes Projekt')}</b><small>${formatDate(r.from)} bis ${formatDate(r.to)}</small></div><span>${r.quantity} Stück</span></div>`}).join(''):'<div class="empty-state">Für dieses Equipment gibt es keine aktive Buchung.</div>';
+  $('#equipmentCalendarContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(item.name)}</h2><p class="dialog-intro">${escapeHtml(item.id)} · Bestand ${item.total}</p>${calendarMonthHtml(anchor,rows)}<h3 class="equipment-calendar-subtitle">Aktive Buchungen</h3><div class="equipment-calendar-bookings">${bookings}</div>`;
+  $('#equipmentCalendarDialog').showModal();
+}
+
 function rentalDays(from, to) {
   const start = new Date(`${from}T12:00:00`);
   const end = new Date(`${to}T12:00:00`);

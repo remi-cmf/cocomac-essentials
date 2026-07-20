@@ -496,3 +496,75 @@ textarea { resize: vertical; }
   .project-status-steps{grid-template-columns:1fr}
   .project-status-step{grid-template-columns:38px minmax(0,1fr)}
 }
+
+
+/* Version 5.9.2 */
+#projectStats{display:none!important}
+#syncBanner{font-size:.76rem!important;padding:6px 9px!important}
+#syncBanner::before{width:7px!important;height:7px!important;margin-right:6px!important}
+
+.availability-row{appearance:none;text-align:left;color:inherit;font:inherit;cursor:pointer;width:100%;grid-template-columns:64px minmax(0,1fr) 150px!important;min-height:0!important;padding:12px!important}
+.availability-row:hover{transform:none}
+.availability-image-wrap{width:64px!important;height:64px!important;padding:6px!important;align-self:center}
+.availability-image{display:block!important;max-width:100%!important;max-height:100%!important;object-fit:contain!important;object-position:center!important}
+.availability-main>b{font-size:.96rem!important;line-height:1.16!important}
+.availability-main>small{font-size:.7rem!important}
+.availability-counts{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-self:center}
+.availability-count{width:auto!important;max-width:none!important;min-width:0;padding:9px 4px!important}
+.availability-projects{margin-top:6px!important;padding:6px 8px!important}
+.availability-meter{margin-top:7px!important}
+.calendar-bookings-details{width:min(920px,100%);margin:14px auto 0;border:1px solid var(--line);border-radius:18px;background:#fff;overflow:hidden}
+.calendar-bookings-details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none}
+.calendar-bookings-details summary::-webkit-details-marker{display:none}
+.calendar-bookings-details summary::after{content:'+';float:right}
+.calendar-bookings-details[open] summary::after{content:'−'}
+.calendar-bookings-details .timeline{padding:0 12px 12px}
+
+#projectDialog form label,#projectDialog form input,#projectDialog form select,#projectDialog form textarea{width:100%;max-width:100%;box-sizing:border-box}
+#projectDialog form{overflow-x:hidden}
+
+#projectsModule .section-heading-inline{align-items:flex-end;gap:18px;margin-bottom:18px}
+#adminAddProjectBtn{flex:0 0 auto;margin:0;white-space:nowrap}
+.admin-project-list,.admin-product-list{clear:both}
+.admin-project-card{margin-top:0}
+
+.mini-calendar{background:#fff;border:1px solid var(--line);border-radius:19px;padding:13px}
+.mini-calendar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;text-transform:capitalize}
+.mini-calendar-head span{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:.7rem}
+.mini-calendar-head i{width:8px;height:8px;border-radius:50%;background:#b04444}
+.mini-calendar-weekdays,.mini-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mini-calendar-weekdays span{text-align:center;color:var(--muted);font-size:.62rem;font-weight:800;padding:2px}
+.mini-calendar-day{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:9px;background:#f7f5ef;font-size:.72rem;font-weight:750}
+.mini-calendar-day.outside{opacity:.3}
+.mini-calendar-day.booked{background:#f8e8e8;color:#8f2c2c}
+.mini-calendar-day.project-day{outline:2px solid #7ba895;outline-offset:-2px}
+.mini-calendar-day.today{box-shadow:inset 0 0 0 2px #171716}
+.mini-calendar-day i{position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:#b04444}
+.project-calendar-overview{margin:14px 0 16px;padding:14px;border-radius:22px;background:#f1f5f2}
+.project-calendar-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.project-calendar-heading small,.project-calendar-heading b{display:block}
+.project-calendar-heading small{font-size:.64rem;color:var(--muted);font-weight:850;letter-spacing:.1em}
+.project-calendar-heading b{margin-top:3px;font-size:.9rem}
+.project-calendar-heading>span{padding:6px 9px;border-radius:999px;background:#fff;color:var(--ok);font-size:.72rem;font-weight:800}
+.equipment-calendar-dialog #equipmentCalendarContent{padding-top:6px}
+.equipment-calendar-subtitle{margin:20px 0 10px}
+.equipment-calendar-bookings{display:grid;gap:8px}
+.equipment-calendar-booking{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.equipment-calendar-booking b,.equipment-calendar-booking small{display:block}
+.equipment-calendar-booking small{margin-top:3px;color:var(--muted)}
+.equipment-calendar-booking>span{white-space:nowrap;padding:6px 8px;border-radius:999px;background:#edf5f0;color:var(--ok);font-size:.72rem;font-weight:800}
+
+@media(max-width:700px){
+  .availability-row{grid-template-columns:52px minmax(0,1fr)!important;gap:8px!important;padding:10px!important}
+  .availability-image-wrap{width:52px!important;height:52px!important;grid-row:1/3}
+  .availability-counts{grid-column:2;grid-template-columns:1fr 1fr;width:100%;margin-top:2px}
+  .availability-count{padding:7px 3px!important}
+  .availability-count b{font-size:1rem!important}
+  .availability-count small{font-size:.68rem!important}
+  .availability-projects{font-size:.7rem}
+  #projectsModule .section-heading-inline{display:grid!important;grid-template-columns:1fr;align-items:stretch}
+  #adminAddProjectBtn{width:100%;margin:0 0 4px}
+  .project-calendar-overview{padding:11px}
+  .mini-calendar{padding:10px}
+  .mini-calendar-day{border-radius:7px;font-size:.66rem}
+}

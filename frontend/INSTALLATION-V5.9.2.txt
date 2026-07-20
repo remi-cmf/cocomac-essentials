@@ -1,0 +1,15 @@
+COCOMAC ESSENTIAL – VERSION 5.9.2
+
+Änderungen:
+- Synchronisationsanzeige verkürzt
+- Statistikblöcke im Projektbereich entfernt
+- kompaktere Kalenderkarten mit einheitlichen Produktbildern
+- Text und Belegungsangaben neu angeordnet
+- Buchungen im Zeitraum einklappbar
+- Equipment-Kalender per Klick auf einen Artikel
+- kleiner Kalenderüberblick in jedem Projekt
+- Projektformular auf einheitliche Feldbreiten korrigiert
+- Admin-Schaltfläche „Neues Projekt“ ohne Überschneidung
+
+Installation:
+Den Inhalt des Frontend-Ordners vollständig in das GitHub-Pages-Repository kopieren und vorhandene Dateien ersetzen.
