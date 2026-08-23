@@ -603,3 +603,8 @@ textarea { resize: vertical; }
 @media(max-width:700px){.invoice-entry-card{grid-template-columns:1fr}.invoice-entry-card button{width:100%}.invoice-dialog-heading{grid-template-columns:1fr}.invoice-dialog-heading img{width:210px;height:76px}.invoice-actions{display:grid}.invoice-actions button{width:100%}}
 
 .app-splash-percent{margin-top:10px;font-size:13px;font-weight:800;color:var(--muted);letter-spacing:.04em;text-align:center}
+
+
+.startup-error-card{position:fixed;z-index:9999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 22px 70px rgba(0,0,0,.18);text-align:center}
+.startup-error-card strong{display:block;font-size:18px;margin-bottom:8px}
+.startup-error-card p{color:var(--muted);line-height:1.45;margin-bottom:16px}

@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=596">
+  <link rel="stylesheet" href="./styles.css?v=597">
 </head>
 
 <body>
@@ -638,7 +638,7 @@
     <div id="equipmentCalendarContent"></div>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.6</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.7</div>
 
   <div
     id="toast"
@@ -647,6 +647,60 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=596" type="module"></script>
+  
+<script>
+(function () {
+  var startedAt = Date.now();
+
+  function setStartup(percent, text) {
+    var bar = document.getElementById('appSplashProgressBar');
+    var label = document.getElementById('appSplashPercent');
+    var copy = document.getElementById('appSplashText');
+    if (bar) bar.style.width = percent + '%';
+    if (label) label.textContent = percent + ' %';
+    if (copy && text) copy.textContent = text;
+  }
+
+  // Dieser Teil läuft unabhängig von app-5.9.7.js.
+  // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
+  setStartup(5, 'App wird gestartet …');
+
+  window.__cmeStartupWatchdog = setTimeout(function () {
+    var splash = document.getElementById('appSplash');
+    if (!splash) return;
+
+    setStartup(100, 'Start fehlgeschlagen');
+
+    var message = document.createElement('div');
+    message.className = 'startup-error-card';
+    message.innerHTML =
+      '<strong>Die App-Datei konnte nicht gestartet werden.</strong>' +
+      '<p>Bitte Seite neu laden. Falls das erneut passiert, liegt es nicht an Google Sheets, sondern am Laden des Frontend-JavaScripts.</p>' +
+      '<button type="button" id="startupReloadBtn">Neu laden</button>';
+    document.body.appendChild(message);
+
+    splash.classList.add('is-finished');
+    setTimeout(function () {
+      if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 450);
+
+    var reload = document.getElementById('startupReloadBtn');
+    if (reload) reload.onclick = function () {
+      var url = new URL(window.location.href);
+      url.searchParams.set('_refresh', Date.now().toString());
+      window.location.replace(url.toString());
+    };
+  }, 15000);
+
+  window.__cmeAppStarted = function () {
+    if (window.__cmeStartupWatchdog) {
+      clearTimeout(window.__cmeStartupWatchdog);
+      window.__cmeStartupWatchdog = null;
+    }
+  };
+})();
+</script>
+
+<script src="./app-5.9.7.js" defer></script>
 </body>
 </html>
