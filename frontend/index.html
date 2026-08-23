@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=597">
+  <link rel="stylesheet" href="./styles.css?v=598">
 </head>
 
 <body>
@@ -424,6 +424,19 @@
         <label>Ende<input id="projectEnd" type="date" required></label>
       </div>
       <label>Notiz<textarea id="projectNotes" placeholder="optional"></textarea></label>
+      <details class="project-invoice-details">
+        <summary>Rechnungsdaten der Firma (optional)</summary>
+        <p class="field-help">Diese Daten sind getrennt von Ansprechpartner und Projekt-E-Mails. Sie werden später automatisch für Rechnungen übernommen.</p>
+        <div class="form-columns">
+          <label>Firma / Organisation<input id="projectInvoiceCompany" autocomplete="organization"></label>
+          <label>Rechnungskontakt / Name<input id="projectInvoiceName" autocomplete="name"></label>
+          <label>Straße und Hausnummer<input id="projectInvoiceStreet" autocomplete="street-address"></label>
+          <label>PLZ<input id="projectInvoicePostalCode" autocomplete="postal-code"></label>
+          <label>Ort<input id="projectInvoiceCity" autocomplete="address-level2"></label>
+          <label>Land<input id="projectInvoiceCountry" value="Deutschland" autocomplete="country-name"></label>
+          <label>Rechnungs-E-Mail<input id="projectInvoiceEmail" type="email" autocomplete="email" placeholder="z. B. rechnung@firma.de"></label>
+        </div>
+      </details>
       <button id="projectSubmitBtn" type="submit">Projekt speichern</button>
     </form>
   </dialog>
@@ -561,6 +574,10 @@
       </div>
       <label>Hinweis auf dem Beleg<textarea id="calculationNote" placeholder="z. B. Sonderkonditionen für Nachwuchsprojekt"></textarea></label>
       <div class="calculation-total"><span>Aktuelle Gesamtsumme</span><b id="calculationGrandTotal">0,00 €</b></div>
+      <section class="invoice-entry-card">
+        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
+        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
+      </section>
       <hr>
       <h3>E-Mail-Versand</h3>
       <div class="form-columns">
@@ -575,10 +592,7 @@
         <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
         <button id="calculationEmailBtn" type="button" class="ghost">Beleg per E-Mail senden</button>
       </div>
-      <section class="invoice-entry-card">
-        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
-        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
-      </section>
+
     </form>
   </dialog>
 
@@ -596,6 +610,7 @@
       <div id="invoiceExistingNotice" class="invoice-existing-notice hidden"></div>
       <section class="invoice-form-card">
         <div class="calculation-section-heading"><div><small>RECHNUNGSEMPFÄNGER</small><h3>Anschrift</h3></div></div>
+        <div class="invoice-profile-save-line"><span>Diese Rechnungsdaten werden automatisch im Projekt gespeichert.</span><b id="invoiceProfileSaveStatus"></b></div>
         <div class="form-columns">
           <label>Firma / Organisation<input id="invoiceCustomerCompany" autocomplete="organization"></label>
           <label>Ansprechpartner / Name<input id="invoiceCustomerName" autocomplete="name"></label>
@@ -638,7 +653,17 @@
     <div id="equipmentCalendarContent"></div>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.7</div>
+
+  <div id="actionLoader" class="action-loader hidden" aria-hidden="true" role="status" aria-live="assertive">
+    <div class="action-loader-card">
+      <div class="action-loader-mark"><span>CME</span></div>
+      <strong id="actionLoaderTitle">Wird verarbeitet …</strong>
+      <p id="actionLoaderDetail">Einen Moment bitte.</p>
+      <div class="action-loader-bar"><span></span></div>
+    </div>
+  </div>
+
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.8</div>
 
   <div
     id="toast"
@@ -661,7 +686,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-5.9.7.js.
+  // Dieser Teil läuft unabhängig von app-5.9.8.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -701,6 +726,6 @@
 })();
 </script>
 
-<script src="./app-5.9.7.js" defer></script>
+<script src="./app-5.9.8.js" defer></script>
 </body>
 </html>

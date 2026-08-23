@@ -608,3 +608,24 @@ textarea { resize: vertical; }
 .startup-error-card{position:fixed;z-index:9999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 22px 70px rgba(0,0,0,.18);text-align:center}
 .startup-error-card strong{display:block;font-size:18px;margin-bottom:8px}
 .startup-error-card p{color:var(--muted);line-height:1.45;margin-bottom:16px}
+
+
+/* Version 5.9.8 – Rechnungsprofil, Ladefeedback und kompakterer Workflow */
+.project-invoice-details{margin:14px 0;padding:14px 16px;border:1px solid var(--line);border-radius:17px;background:#fff}
+.project-invoice-details summary{cursor:pointer;font-weight:850;color:var(--ink)}
+.project-invoice-details[open] summary{margin-bottom:8px}
+.invoice-profile-save-line{display:flex;justify-content:space-between;gap:16px;align-items:center;margin:0 0 12px;padding:9px 11px;border-radius:12px;background:#f4f1e8;color:var(--muted);font-size:.78rem}
+.invoice-profile-save-line b{color:var(--ok);text-align:right}
+.invoice-entry-card{position:relative;margin:18px 0 22px;border:2px solid var(--ink)}
+.invoice-entry-card button{min-width:190px}
+.invoice-actions{position:sticky;bottom:10px;z-index:2;padding:11px;background:rgba(244,241,232,.92);backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:17px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.action-loader{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(23,23,22,.64);backdrop-filter:blur(6px)}
+.action-loader-card{width:min(390px,calc(100vw - 32px));padding:26px;border-radius:24px;background:var(--paper);text-align:center;box-shadow:0 24px 90px rgba(0,0,0,.32)}
+.action-loader-mark{display:grid;place-items:center;width:78px;height:78px;margin:0 auto 17px;border-radius:24px;background:var(--ink);color:#fff;font-weight:900;letter-spacing:.08em;animation:cmeLoaderBounce 1.05s ease-in-out infinite}
+.action-loader-card strong{display:block;font-size:1.18rem;margin-bottom:6px}
+.action-loader-card p{margin:0;color:var(--muted);line-height:1.4}
+.action-loader-bar{height:6px;margin-top:18px;border-radius:999px;background:#dcd8ce;overflow:hidden}
+.action-loader-bar span{display:block;width:38%;height:100%;border-radius:inherit;background:var(--ok);animation:cmeLoaderSlide 1.1s ease-in-out infinite}
+@keyframes cmeLoaderBounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
+@keyframes cmeLoaderSlide{0%{transform:translateX(-120%)}50%{transform:translateX(120%)}100%{transform:translateX(330%)}}
+@media(max-width:700px){.invoice-profile-save-line{display:grid;gap:4px}.invoice-profile-save-line b{text-align:left}.invoice-actions{bottom:6px}}
