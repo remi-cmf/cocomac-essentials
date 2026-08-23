@@ -665,3 +665,69 @@ textarea { resize: vertical; }
 .email-send-details[open] summary b{transform:rotate(90deg)}
 .email-send-details-content{padding:0 15px 15px}
 @media(max-width:700px){.email-send-details summary{grid-template-columns:1fr auto}.email-send-details summary small{display:none}}
+
+
+/* Version 6.0.2 – Mobile Hochformat */
+@media (max-width: 620px) {
+  body{font-size:15px}
+  main{padding-left:10px!important;padding-right:10px!important}
+  dialog,
+  .wide-dialog,
+  .calculation-dialog,
+  .invoice-dialog{
+    inline-size:calc(100vw - 8px)!important;
+    width:calc(100vw - 8px)!important;
+    max-inline-size:calc(100vw - 8px)!important;
+    max-width:calc(100vw - 8px)!important;
+    max-height:calc(100dvh - 8px)!important;
+    margin:4px auto!important;
+    padding:14px!important;
+    border-radius:18px!important;
+  }
+  .invoice-dialog .invoice-brand-head{
+    grid-template-columns:1fr!important;
+    gap:12px!important;
+  }
+  .invoice-dialog .invoice-brand-head img{
+    max-width:130px!important;
+  }
+  .invoice-dialog .form-columns,
+  .project-meta-grid,
+  .invoice-summary-grid{
+    grid-template-columns:1fr!important;
+  }
+  .invoice-dialog label,
+  .invoice-dialog input,
+  .invoice-dialog textarea,
+  .invoice-dialog select{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .invoice-actions{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+    padding:10px 0 0!important;
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    backdrop-filter:none!important;
+  }
+  .invoice-actions button{
+    width:100%!important;
+    min-height:48px!important;
+    white-space:normal!important;
+  }
+  .project-primary-actions{
+    position:sticky!important;
+    top:0!important;
+    z-index:15!important;
+  }
+  .booking-row,
+  .availability-row,
+  .admin-product-row{
+    max-width:100%!important;
+    overflow:hidden!important;
+  }
+}
