@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=593">
+  <link rel="stylesheet" href="./styles.css?v=594">
 </head>
 
 <body>
@@ -531,7 +531,7 @@
   </dialog>
 
 
-  <!-- Projektkalkulation und Versand -->
+  <!-- Buchungsüberblick, Beleg und Rechnungsübergabe -->
   <dialog id="projectCalculationDialog" class="wide-dialog calculation-dialog">
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="projectCalculationForm">
@@ -571,10 +571,65 @@
       <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
       <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
       <div class="calculation-save-bar"><button id="calculationSaveBottomBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusBottom" class="meta"></span></div>
-      <div class="project-actions">
+      <div class="project-actions calculation-document-actions">
         <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
-        <button id="calculationEmailBtn" type="button" class="ghost">PDF per E-Mail senden</button>
+        <button id="calculationEmailBtn" type="button" class="ghost">Beleg per E-Mail senden</button>
       </div>
+      <section class="invoice-entry-card">
+        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
+        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
+      </section>
+    </form>
+  </dialog>
+
+
+
+  <!-- Rechnung aus Buchungsüberblick -->
+  <dialog id="invoiceDialog" class="wide-dialog invoice-dialog">
+    <button type="button" class="close" data-close aria-label="Zurück">←</button>
+    <form id="invoiceForm">
+      <input id="invoiceProjectId" type="hidden">
+      <div class="invoice-dialog-heading">
+        <img src="./assets/cocomac-logo.png" alt="Cocomac Essential">
+        <div><small>COCOMAC ESSENTIAL</small><h2>Rechnung erstellen</h2><p>Rechnungssteller: Cocomac Film GmbH</p></div>
+      </div>
+      <div id="invoiceExistingNotice" class="invoice-existing-notice hidden"></div>
+      <section class="invoice-form-card">
+        <div class="calculation-section-heading"><div><small>RECHNUNGSEMPFÄNGER</small><h3>Anschrift</h3></div></div>
+        <div class="form-columns">
+          <label>Firma / Organisation<input id="invoiceCustomerCompany" autocomplete="organization"></label>
+          <label>Ansprechpartner / Name<input id="invoiceCustomerName" autocomplete="name"></label>
+          <label>Straße und Hausnummer<input id="invoiceCustomerStreet" autocomplete="street-address" required></label>
+          <label>PLZ<input id="invoiceCustomerPostalCode" autocomplete="postal-code" required></label>
+          <label>Ort<input id="invoiceCustomerCity" autocomplete="address-level2" required></label>
+          <label>Land<input id="invoiceCustomerCountry" value="Deutschland" autocomplete="country-name" required></label>
+          <label>E-Mail<input id="invoiceCustomerEmail" type="email" autocomplete="email"></label>
+          <label>Referenz / Bestellnummer<input id="invoiceReference" placeholder="optional"></label>
+        </div>
+      </section>
+      <section class="invoice-form-card">
+        <div class="calculation-section-heading"><div><small>RECHNUNGSDATEN</small><h3>Datum und Zahlungsziel</h3></div></div>
+        <div class="form-columns">
+          <label>Rechnungsdatum<input id="invoiceDate" type="date" required></label>
+          <label>Fällig am<input id="invoiceDueDate" type="date" required></label>
+          <label>Leistungszeitraum von<input id="invoiceServiceFrom" type="date" required></label>
+          <label>Leistungszeitraum bis<input id="invoiceServiceTo" type="date" required></label>
+        </div>
+        <label>Zusätzlicher Rechnungshinweis<textarea id="invoiceNote" placeholder="optional"></textarea></label>
+      </section>
+      <section class="invoice-preview-summary">
+        <div><span>Netto</span><b id="invoiceNetPreview">0,00 €</b></div>
+        <div><span>19 % USt.</span><b id="invoiceTaxPreview">0,00 €</b></div>
+        <div class="invoice-preview-total"><span>Brutto</span><b id="invoiceGrossPreview">0,00 €</b></div>
+      </section>
+      <p class="field-help invoice-legal-hint">Mit „Rechnung verbindlich erstellen“ wird eine fortlaufende Rechnungsnummer vergeben und das PDF im Rechnungsarchiv gespeichert.</p>
+      <div class="invoice-actions">
+        <button id="invoicePreviewBtn" type="button" class="ghost">Vorschau</button>
+        <button id="invoiceCreateBtn" type="submit">Rechnung verbindlich erstellen</button>
+        <button id="invoiceOpenPdfBtn" type="button" class="ghost hidden">PDF öffnen</button>
+        <button id="invoiceEmailBtn" type="button" class="ghost hidden">Rechnung per E-Mail senden</button>
+      </div>
+      <div id="invoiceStatus" class="save-status hidden" aria-live="polite"></div>
     </form>
   </dialog>
 
@@ -583,7 +638,7 @@
     <div id="equipmentCalendarContent"></div>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.3</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.4</div>
 
   <div
     id="toast"
@@ -592,6 +647,6 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=593" type="module"></script>
+  <script src="./app.js?v=594" type="module"></script>
 </body>
 </html>

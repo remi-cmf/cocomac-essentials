@@ -39,6 +39,7 @@ let qrCodes = [];
 let productQrScanReturnDialog = null;
 let inventoryCounts = {};
 let calculationDirty = false;
+let activeInvoice = null;
 let qrDatabaseFilter = 'all';
 const calendarAnchors = new Map();
 
@@ -1150,6 +1151,11 @@ function bind() {
   $('#projectForm').onsubmit = submitProject;
   $('#calculationPreviewBtn').onclick = previewProjectCalculation;
   $('#calculationEmailBtn').onclick = emailProjectCalculation;
+  $('#openInvoiceBtn').onclick = openInvoiceDialog;
+  $('#invoiceForm').onsubmit = createInvoice;
+  $('#invoicePreviewBtn').onclick = previewInvoice;
+  $('#invoiceOpenPdfBtn').onclick = openCreatedInvoicePdf;
+  $('#invoiceEmailBtn').onclick = emailCreatedInvoice;
   ['calculationDiscount','calculationExtraCost','calculationExtraLabel','calculationTaxMode'].forEach(id => {
     const el = $('#'+id); if (el) el.oninput = el.onchange = updateCalculationTotal;
   });
@@ -2264,7 +2270,7 @@ function buildDefaultCalculation(projectId) {
     note: '',
     emailTo: [project.email1, project.email2].filter(Boolean).join(', '),
     emailCc: '',
-    emailSubject: `Cocomac Essentials – Equipment für ${project.name}`,
+    emailSubject: `Cocomac Essential – Equipment für ${project.name}`,
     emailBody: `Hallo,\n\nanbei findest du die Equipmentübersicht für das Projekt ${project.name}.\n\nViele Grüße\nCocomac Film GmbH`
   };
 }
@@ -2467,7 +2473,7 @@ function projectCalculationHtml(calculation) {
   const taxRows = calculation.taxMode==='gross'
     ? `<div class="sumrow"><span>Netto</span><b>${euro(totals.net)}</b></div><div class="sumrow"><span>19 % MwSt.</span><b>${euro(totals.gross-totals.net)}</b></div><div class="sumrow total"><span>Brutto</span><b>${euro(totals.gross)}</b></div>`
     : `<div class="sumrow total"><span>Gesamtsumme netto</span><b>${euro(totals.net)}</b></div>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}.pdf-actions{position:sticky;bottom:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:40px auto 0;padding:12px;width:fit-content;max-width:100%;background:rgba(255,255,255,.94);border:1px solid #ddd8cc;border-radius:22px;box-shadow:0 12px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.pdf-actions button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer}.pdf-primary{background:#171716;color:#fff;border:1px solid #171716}.pdf-secondary{background:#fff;color:#171716;border:1px solid #d8d4ca}@media(max-width:600px){body{padding:18px}.pdf-actions{width:100%;display:grid}.pdf-actions button{width:100%}}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print pdf-actions"><button class="pdf-primary" onclick="window.print()"><span>↓</span>Drucken / PDF sichern</button><button class="pdf-secondary" onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}"><span>←</span>Zurück zum Buchungsüberblick</button></div></body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektbeleg ${escapeHtml(p.name)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1150px;margin:auto}h1{margin:8px 0 4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:10px 7px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:11px;text-transform:uppercase}.summary{margin:24px 0 0 auto;width:min(390px,100%)}.sumrow{display:flex;justify-content:space-between;padding:7px 0}.total{border-top:2px solid;font-size:18px}.note{margin-top:25px;padding:14px;background:#f4f1e8}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}.pdf-actions{position:sticky;bottom:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:40px auto 0;padding:12px;width:fit-content;max-width:100%;background:rgba(255,255,255,.94);border:1px solid #ddd8cc;border-radius:22px;box-shadow:0 12px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.pdf-actions button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:15px;padding:14px 20px;font:inherit;font-weight:800;cursor:pointer}.pdf-primary{background:#171716;color:#fff;border:1px solid #171716}.pdf-secondary{background:#fff;color:#171716;border:1px solid #d8d4ca}@media(max-width:600px){body{padding:18px}.pdf-actions{width:100%;display:grid}.pdf-actions button{width:100%}}@media print{.no-print{display:none}body{padding:0}}</style></head><body><small>COCOMAC ESSENTIAL · COCOMAC FILM GMBH</small><h1>Equipment-Nachweisbeleg</h1><h2>${escapeHtml(p.name)}</h2><p><b>${escapeHtml(p.number||p.id)}</b><br>Projektzeitraum: ${formatDate(p.start)} – ${formatDate(p.end)}<br>Ansprechpartner: ${escapeHtml(p.contact||'–')}</p><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Zeitraum</th><th>Preis / Abrechnung</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows||'<tr><td colspan="7">Keine Positionen.</td></tr>'}${calculation.extraCost?`<tr><td>Zusatz</td><td colspan="5">${escapeHtml(calculation.extraLabel||'Zusätzliche Kosten')}</td><td>${euro(calculation.extraCost)}</td></tr>`:''}</tbody></table><div class="summary">${calculation.discount?`<div class="sumrow"><span>Gesamtrabatt</span><b>${calculation.discount} %</b></div>`:''}${taxRows}</div>${calculation.note?`<div class="note"><b>Hinweis</b><br>${escapeHtml(calculation.note).replace(/\n/g,'<br>')}</div>`:''}<div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><div class="no-print pdf-actions"><button class="pdf-primary" onclick="window.print()"><span>↓</span>Drucken / PDF sichern</button><button class="pdf-secondary" onclick="if(window.opener&&!window.opener.closed){window.close()}else{history.back()}"><span>←</span>Zurück zum Buchungsüberblick</button></div></body></html>`;
 }
 
 function previewProjectCalculation() {
@@ -2476,6 +2482,158 @@ function previewProjectCalculation() {
   const popup = window.open('', '_blank');
   if (!popup) return toast('Bitte Pop-ups erlauben.');
   popup.document.open(); popup.document.write(projectCalculationHtml(calculation)); popup.document.close();
+}
+
+
+function isoToday() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0,10);
+}
+function addDaysIso(iso, days) {
+  const d = new Date(String(iso || isoToday()) + 'T12:00:00');
+  d.setDate(d.getDate() + Number(days || 0));
+  return d.toISOString().slice(0,10);
+}
+function invoiceTotalsFromCalculation(calculation) {
+  const base = calculationTotals(calculation);
+  const net = Number(base.net || 0);
+  const tax = net * 0.19;
+  return {net, tax, gross: net + tax};
+}
+function renderInvoiceTotals() {
+  if (!activeCalculation) return;
+  const totals = invoiceTotalsFromCalculation(readCalculationForm());
+  $('#invoiceNetPreview').textContent = euro(totals.net);
+  $('#invoiceTaxPreview').textContent = euro(totals.tax);
+  $('#invoiceGrossPreview').textContent = euro(totals.gross);
+}
+function invoiceFormPayload() {
+  const calculation = readCalculationForm();
+  return {
+    projectId: calculation.projectId,
+    customerCompany: $('#invoiceCustomerCompany').value.trim(),
+    customerName: $('#invoiceCustomerName').value.trim(),
+    customerStreet: $('#invoiceCustomerStreet').value.trim(),
+    customerPostalCode: $('#invoiceCustomerPostalCode').value.trim(),
+    customerCity: $('#invoiceCustomerCity').value.trim(),
+    customerCountry: $('#invoiceCustomerCountry').value.trim(),
+    customerEmail: $('#invoiceCustomerEmail').value.trim(),
+    reference: $('#invoiceReference').value.trim(),
+    invoiceDate: $('#invoiceDate').value,
+    dueDate: $('#invoiceDueDate').value,
+    serviceFrom: $('#invoiceServiceFrom').value,
+    serviceTo: $('#invoiceServiceTo').value,
+    note: $('#invoiceNote').value.trim(),
+    lines: calculation.lines,
+    discount: calculation.discount,
+    extraCost: calculation.extraCost,
+    extraLabel: calculation.extraLabel,
+    calculationNote: calculation.note,
+    taxRate: 19
+  };
+}
+function setInvoiceStatus(message, isError=false) {
+  const el = $('#invoiceStatus');
+  if (!message) { el.classList.add('hidden'); el.textContent=''; return; }
+  el.textContent = message;
+  el.classList.remove('hidden');
+  el.classList.toggle('invoice-error', Boolean(isError));
+}
+async function openInvoiceDialog() {
+  if (!activeCalculation) return toast('Bitte zuerst den Buchungsüberblick öffnen.');
+  const calculation = readCalculationForm();
+  const project = projects.find(item => item.id === calculation.projectId);
+  if (!project) return toast('Projekt nicht gefunden.');
+  activeInvoice = null;
+  $('#invoiceProjectId').value = project.id;
+  $('#invoiceCustomerCompany').value = '';
+  $('#invoiceCustomerName').value = project.contact || '';
+  $('#invoiceCustomerStreet').value = '';
+  $('#invoiceCustomerPostalCode').value = '';
+  $('#invoiceCustomerCity').value = '';
+  $('#invoiceCustomerCountry').value = 'Deutschland';
+  $('#invoiceCustomerEmail').value = project.email1 || '';
+  $('#invoiceReference').value = project.number || '';
+  $('#invoiceDate').value = isoToday();
+  $('#invoiceDueDate').value = addDaysIso(isoToday(), 14);
+  $('#invoiceServiceFrom').value = project.start || isoToday();
+  $('#invoiceServiceTo').value = project.end || project.start || isoToday();
+  $('#invoiceNote').value = '';
+  $('#invoiceExistingNotice').classList.add('hidden');
+  $('#invoiceOpenPdfBtn').classList.add('hidden');
+  $('#invoiceEmailBtn').classList.add('hidden');
+  $('#invoiceCreateBtn').disabled = false;
+  setInvoiceStatus('');
+  renderInvoiceTotals();
+  $('#invoiceDialog').showModal();
+  if (settings().cloudMode) {
+    try {
+      const result = await sendCloudJsonpAction('getProjectInvoice', {projectId:project.id}, 30000);
+      if (result?.invoice) applyExistingInvoice(result.invoice);
+    } catch (error) { console.warn('Rechnung konnte nicht geprüft werden:', error); }
+  }
+}
+function applyExistingInvoice(invoice) {
+  activeInvoice = invoice;
+  const notice = $('#invoiceExistingNotice');
+  notice.innerHTML = `<b>Rechnung ${escapeHtml(invoice.invoiceNumber || '')}</b><span>Für dieses Projekt wurde bereits eine Rechnung erstellt. Die bestehende Rechnung wird nicht überschrieben.</span>`;
+  notice.classList.remove('hidden');
+  $('#invoiceCreateBtn').disabled = true;
+  if (invoice.pdfUrl) $('#invoiceOpenPdfBtn').classList.remove('hidden');
+  $('#invoiceEmailBtn').classList.remove('hidden');
+  setInvoiceStatus(`Rechnung ${invoice.invoiceNumber} · ${euro(invoice.gross)} brutto`);
+}
+function invoicePreviewHtml(payload) {
+  const project = projects.find(item => item.id === payload.projectId);
+  const calc = {...readCalculationForm(), lines:payload.lines};
+  const totals = invoiceTotalsFromCalculation(calc);
+  const rows = payload.lines.map(line => {
+    const units=billingUnits(line);
+    const total=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*units*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
+    return `<tr><td>${escapeHtml(line.name||line.productId)}</td><td>${Number(line.quantity||0)}</td><td>${escapeHtml(billingTypeLabel(line.billingType))}</td><td>${euro(line.unitPrice)}</td><td>${line.discount?Math.round(line.discount)+' %':'–'}</td><td class="right">${euro(total)}</td></tr>`;
+  }).join('');
+  const customer = [payload.customerCompany,payload.customerName,payload.customerStreet,`${payload.customerPostalCode} ${payload.customerCity}`.trim(),payload.customerCountry].filter(Boolean).map(escapeHtml).join('<br>');
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rechnungsvorschau</title><style>*{box-sizing:border-box}body{margin:0;padding:42px;font:13px Arial,sans-serif;color:#171716;max-width:950px;margin:auto}.logo{width:280px;max-height:110px;object-fit:contain;object-position:left center}.top{display:flex;justify-content:space-between;gap:40px;align-items:flex-start}.issuer{font-size:11px;color:#666}.recipient{margin:48px 0 30px;min-height:95px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 26px;margin:20px 0 28px}.meta div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:5px 0}h1{font-size:28px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{font-size:10px;text-transform:uppercase;text-align:left;background:#171716;color:#fff;padding:9px 7px}td{padding:10px 7px;border-bottom:1px solid #ddd}.right{text-align:right}.summary{width:340px;max-width:100%;margin:26px 0 0 auto}.summary div{display:flex;justify-content:space-between;padding:7px 0}.summary .total{font-size:17px;border-top:2px solid #171716}.footer{margin-top:55px;padding-top:14px;border-top:1px solid #bbb;color:#666;font-size:10px;line-height:1.5}.preview{padding:9px 12px;background:#f4f1e8;border-radius:10px;margin-bottom:24px}@media(max-width:650px){body{padding:20px}.top{display:block}.meta{grid-template-columns:1fr}.logo{width:220px}}</style></head><body><div class="preview"><b>VORSCHAU</b> · Die endgültige Rechnungsnummer wird erst beim verbindlichen Erstellen vergeben.</div><div class="top"><div><img class="logo" src="./assets/cocomac-logo.png" alt="Cocomac Essential"><div class="issuer">Cocomac Essential · ein Geschäftsbereich der Cocomac Film GmbH</div></div><div><h1>Rechnung</h1><b>${escapeHtml(project?.name||'')}</b></div></div><div class="recipient">${customer||'<span style="color:#999">Empfängeranschrift fehlt</span>'}</div><div class="meta"><div><span>Rechnungsdatum</span><b>${formatDate(payload.invoiceDate)}</b></div><div><span>Fällig am</span><b>${formatDate(payload.dueDate)}</b></div><div><span>Leistungszeitraum</span><b>${formatDate(payload.serviceFrom)} – ${formatDate(payload.serviceTo)}</b></div><div><span>Referenz</span><b>${escapeHtml(payload.reference||'–')}</b></div></div><table><thead><tr><th>Leistung</th><th>Menge</th><th>Abrechnung</th><th>Einzelpreis</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows}</tbody></table><div class="summary"><div><span>Netto</span><b>${euro(totals.net)}</b></div><div><span>19 % USt.</span><b>${euro(totals.tax)}</b></div><div class="total"><span>Gesamtbetrag</span><b>${euro(totals.gross)}</b></div></div><div class="footer">Cocomac Film GmbH · Gänselieselstraße 29 · 81739 München · Amtsgericht München HRB 302375 · Geschäftsführer Rémi Königswenger<br>Steuernummer 143/125/42170 · USt-IdNr. DE457179561 · Meine Volksbank Raiffeisenbank · IBAN DE45 7116 0000 0007 1767 59</div></body></html>`;
+}
+function previewInvoice() {
+  const payload = invoiceFormPayload();
+  const popup = window.open('', '_blank');
+  if (!popup) return toast('Bitte Pop-ups für die Vorschau erlauben.');
+  popup.document.open(); popup.document.write(invoicePreviewHtml(payload)); popup.document.close();
+}
+async function createInvoice(event) {
+  event.preventDefault();
+  if (activeInvoice) return toast('Für dieses Projekt existiert bereits eine Rechnung.');
+  if (!settings().cloudMode) return toast('Rechnungen können nur mit aktiver Google-Sheets-Verbindung erstellt werden.');
+  const payload = invoiceFormPayload();
+  if (!payload.customerCompany && !payload.customerName) return toast('Bitte Firma oder Namen des Rechnungsempfängers eintragen.');
+  const button = $('#invoiceCreateBtn');
+  button.disabled = true; setInvoiceStatus('Rechnung wird erstellt …');
+  try {
+    const result = await sendCloudJsonpAction('createInvoice', payload, 120000);
+    if (!result?.invoice) throw new Error('Das Backend hat keine Rechnung zurückgegeben.');
+    applyExistingInvoice(result.invoice);
+    toast(`Rechnung ${result.invoice.invoiceNumber} wurde erstellt.`);
+  } catch (error) {
+    button.disabled = false; setInvoiceStatus(error.message || 'Rechnung konnte nicht erstellt werden.', true); toast(error.message || 'Rechnung konnte nicht erstellt werden.');
+  }
+}
+function openCreatedInvoicePdf() {
+  if (!activeInvoice?.pdfUrl) return toast('Für diese Rechnung ist kein PDF-Link vorhanden.');
+  window.open(activeInvoice.pdfUrl, '_blank', 'noopener');
+}
+async function emailCreatedInvoice() {
+  if (!activeInvoice?.invoiceNumber) return toast('Bitte zuerst die Rechnung erstellen.');
+  const to = $('#invoiceCustomerEmail').value.trim() || activeInvoice.customerEmail || '';
+  if (!to) return toast('Bitte eine E-Mail-Adresse des Rechnungsempfängers eintragen.');
+  const button=$('#invoiceEmailBtn'); button.disabled=true; setInvoiceStatus('Rechnung wird per E-Mail gesendet …');
+  try {
+    const result=await sendCloudJsonpAction('emailInvoice',{invoiceNumber:activeInvoice.invoiceNumber,emailTo:to},120000);
+    if (result?.invoice) activeInvoice=result.invoice;
+    setInvoiceStatus(`Rechnung ${activeInvoice.invoiceNumber} wurde an ${to} gesendet.`); toast('Rechnung wurde versendet.');
+  } catch(error) { setInvoiceStatus(error.message || 'Versand fehlgeschlagen.',true); toast(error.message || 'Versand fehlgeschlagen.'); }
+  finally { button.disabled=false; }
 }
 
 async function emailProjectCalculation() {
@@ -2530,7 +2688,7 @@ function projectDocumentHtml(projectId) {
   const damageItems = projectDamages.map(d => { const item = catalog.find(x => x.id === d.productId); return `<tr class="damage-line"><td>${escapeHtml(d.productId)}</td><td><b>Schaden: ${escapeHtml(item?.name || d.productId)}</b><br><small>${escapeHtml(d.description)}</small></td><td>${d.quantity}</td><td>${formatDate(d.date)}</td><td>${euro(d.unitValue)}</td><td>${euro(d.totalValue)}</td></tr>`; }).join('');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipment ${escapeHtml(p.name)}</title><style>
     *{box-sizing:border-box}body{font:14px Arial,sans-serif;padding:32px;color:#171716;max-width:1100px;margin:auto}h1{margin:8px 0 4px}h2{margin:0 0 16px}.project-number{font-weight:700;letter-spacing:.05em}.meta{line-height:1.7;margin:18px 0}.table-wrap{width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:24px;min-width:780px}th,td{padding:10px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}th{font-size:12px;text-transform:uppercase;letter-spacing:.04em}small{color:#666}.total{margin:20px 0 0 auto;width:min(340px,100%);display:flex;justify-content:space-between;border-top:2px solid #171716;padding-top:12px;font-size:18px}.sign{margin-top:70px;display:flex;gap:70px}.line{border-top:1px solid;width:240px;padding-top:7px}@media(max-width:700px){body{padding:18px}.sign{gap:30px}.line{width:50%}}@media print{body{padding:0}.table-wrap{overflow:visible}table{min-width:0}.no-print{display:none}}
-  </style></head><body><small>COCOMAC FILM GMBH · COCOMAC ESSENTIALS</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Mietpreis / Stück</th><th>Positionspreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}${damageItems}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
+  </style></head><body><small>COCOMAC ESSENTIAL · COCOMAC FILM GMBH</small><h1>Equipment-Ausgabe / Reservierung</h1><h2>${escapeHtml(p.name)}</h2><div class="project-number">${escapeHtml(p.number || p.id)}</div><div class="meta"><b>Projektzeitraum:</b> ${formatDate(p.start)} – ${formatDate(p.end)}<br><b>Ansprechpartner:</b> ${escapeHtml(p.contact || '–')}<br><b>Status:</b> ${escapeHtml(p.status)}</div><div class="table-wrap"><table><thead><tr><th>Artikelnummer</th><th>Produkt</th><th>Menge</th><th>Buchungszeitraum</th><th>Mietpreis / Stück</th><th>Positionspreis</th></tr></thead><tbody>${items || '<tr><td colspan="6">Kein Equipment zugeordnet.</td></tr>'}${damageItems}</tbody></table></div><div class="total"><b>Gesamter Mietpreis</b><b>${euro(grandTotal)}</b></div><div class="sign"><div class="line">Ausgabe / Datum</div><div class="line">Unterschrift</div></div><p class="no-print" style="margin-top:40px;text-align:center"><button onclick="window.print()" style="padding:12px 18px;font:inherit;font-weight:700">Drucken / als PDF sichern</button></p></body></html>`;
 }
 function printProjectDocument(projectId) {
   let html;
