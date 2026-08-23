@@ -1,3 +1,21 @@
+
+function setBootProgress(percent, text) {
+  const safe = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const bar = document.querySelector('#appSplashProgressBar');
+  const label = document.querySelector('#appSplashPercent');
+  const splashText = document.querySelector('#appSplashText');
+  if (bar) bar.style.width = safe + '%';
+  if (label) label.textContent = safe + ' %';
+  if (splashText && text) splashText.textContent = text;
+}
+
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Zeitüberschreitung')), ms))
+  ]);
+}
+
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 
@@ -68,36 +86,44 @@ function canonicalCategory(value) {
 
 async function boot() {
   const splash = $('#appSplash');
-  const splashText = $('#appSplashText');
-  if (splashText) splashText.textContent = 'Equipment und Projekte werden geladen …';
+  setBootProgress(5, 'App wird vorbereitet …');
 
   baseCatalog = [];
   state = readJson(LOCAL_KEY, { movements: [] });
 
-  // Events zuerst binden, damit Verbindungseinstellungen auch bei Backend-Fehlern erreichbar bleiben.
+  setBootProgress(15, 'Bedienung wird geladen …');
   bind();
 
   let bootError = null;
   try {
-    await refreshCatalog();
+    setBootProgress(30, 'Verbindung zum Backend …');
+    await withTimeout(refreshCatalog(), 12000, 'Backend antwortet nicht innerhalb von 12 Sekunden.');
+    setBootProgress(82, 'Daten werden verarbeitet …');
   } catch (error) {
     bootError = error;
     console.error('Start-Synchronisierung fehlgeschlagen:', error);
   }
 
-  render();
+  try {
+    render();
+  } catch (renderError) {
+    if (!bootError) bootError = renderError;
+    console.error('Rendern fehlgeschlagen:', renderError);
+  }
 
   if (bootError) {
+    setBootProgress(100, 'Verbindung fehlgeschlagen');
     const banner = $('#syncBanner');
     if (banner) {
       banner.classList.add('demo');
       banner.textContent = 'Verbindung zum Backend fehlgeschlagen: ' + (bootError.message || 'Unbekannter Fehler');
     }
-    if (splashText) splashText.textContent = 'Verbindung fehlgeschlagen';
     await new Promise(resolve => setTimeout(resolve, 450));
   } else {
-    if (splashText) splashText.textContent = 'Alles bereit';
-    await new Promise(resolve => setTimeout(resolve, 220));
+    setBootProgress(94, 'Oberfläche wird geöffnet …');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    setBootProgress(100, 'Alles bereit');
+    await new Promise(resolve => setTimeout(resolve, 180));
   }
 
   splash?.classList.add('is-finished');
@@ -121,7 +147,6 @@ async function boot() {
     else if (directId) openDetail(directId);
   }
 
-  // Bei einem Verbindungsfehler bleibt die App bedienbar und die Verbindung kann korrigiert werden.
   if (bootError) {
     setTimeout(() => {
       const dialog = $('#settingsDialog');
