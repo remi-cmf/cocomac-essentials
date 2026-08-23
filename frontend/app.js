@@ -70,18 +70,39 @@ async function boot() {
   const splash = $('#appSplash');
   const splashText = $('#appSplashText');
   if (splashText) splashText.textContent = 'Equipment und Projekte werden geladen …';
-  // Google Sheets ist die zentrale Datenquelle. Die große lokale Importdatei
-  // wird nicht mehr bei jedem Start heruntergeladen.
-  baseCatalog = [];
 
+  baseCatalog = [];
   state = readJson(LOCAL_KEY, { movements: [] });
-  await refreshCatalog();
+
+  // Events zuerst binden, damit Verbindungseinstellungen auch bei Backend-Fehlern erreichbar bleiben.
   bind();
+
+  let bootError = null;
+  try {
+    await refreshCatalog();
+  } catch (error) {
+    bootError = error;
+    console.error('Start-Synchronisierung fehlgeschlagen:', error);
+  }
+
   render();
-  if (splashText) splashText.textContent = 'Alles bereit';
-  await new Promise(resolve => setTimeout(resolve, 220));
+
+  if (bootError) {
+    const banner = $('#syncBanner');
+    if (banner) {
+      banner.classList.add('demo');
+      banner.textContent = 'Verbindung zum Backend fehlgeschlagen: ' + (bootError.message || 'Unbekannter Fehler');
+    }
+    if (splashText) splashText.textContent = 'Verbindung fehlgeschlagen';
+    await new Promise(resolve => setTimeout(resolve, 450));
+  } else {
+    if (splashText) splashText.textContent = 'Alles bereit';
+    await new Promise(resolve => setTimeout(resolve, 220));
+  }
+
   splash?.classList.add('is-finished');
   setTimeout(() => splash?.remove(), 520);
+
   setupAutomaticCloudSync();
 
   if ('serviceWorker' in navigator) {
@@ -95,7 +116,22 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   const directId = params.get('id') || params.get('item');
   const directQr = params.get('qr');
-  if (directQr) handleScannedArticle(directQr); else if (directId) openDetail(directId);
+  if (!bootError) {
+    if (directQr) handleScannedArticle(directQr);
+    else if (directId) openDetail(directId);
+  }
+
+  // Bei einem Verbindungsfehler bleibt die App bedienbar und die Verbindung kann korrigiert werden.
+  if (bootError) {
+    setTimeout(() => {
+      const dialog = $('#settingsDialog');
+      if (dialog && typeof dialog.showModal === 'function' && !dialog.open) {
+        const input = $('#apiUrl');
+        if (input) input.value = settings().apiUrl || '';
+        dialog.showModal();
+      }
+    }, 700);
+  }
 }
 
 function readJson(key, fallback) {
@@ -111,10 +147,11 @@ function settings() {
   const configured = {
     ...stored,
     cloudMode: CLOUD_MODE_LOCKED ? true : Boolean(stored.cloudMode),
-    apiUrl: DEFAULT_API_URL
+    apiUrl: String(stored.apiUrl || DEFAULT_API_URL).trim()
   };
 
-  // Migriert ältere Installationen automatisch vom lokalen Testmodus in die Cloud.
+  // Migriert ältere Installationen automatisch vom lokalen Testmodus in die Cloud,
+  // lässt aber eine manuell hinterlegte /exec-Adresse bestehen.
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(configured));
   return configured;
 }
