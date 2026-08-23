@@ -629,3 +629,29 @@ textarea { resize: vertical; }
 @keyframes cmeLoaderBounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
 @keyframes cmeLoaderSlide{0%{transform:translateX(-120%)}50%{transform:translateX(120%)}100%{transform:translateX(330%)}}
 @media(max-width:700px){.invoice-profile-save-line{display:grid;gap:4px}.invoice-profile-save-line b{text-align:left}.invoice-actions{bottom:6px}}
+
+/* Version 5.9.9 */
+.project-primary-actions{position:sticky;top:0;z-index:8;display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;padding:10px;border:1px solid var(--line);border-radius:18px;background:rgba(244,241,232,.96);backdrop-filter:blur(14px);box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.project-primary-actions button{flex:1 1 180px}
+.project-calendar-overview.compact{padding:10px 12px}
+.calendar-collapsible{margin-top:8px;border:1px solid var(--line);border-radius:16px;background:#fff;overflow:hidden}
+.calendar-collapsible summary{list-style:none;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:9px;padding:12px 14px;cursor:pointer;font-weight:800}
+.calendar-collapsible summary::-webkit-details-marker{display:none}
+.calendar-collapsible summary small{color:var(--muted);font-weight:600}
+.calendar-collapsible summary b{font-size:20px;transition:transform .18s}
+.calendar-collapsible[open] summary b{transform:rotate(90deg)}
+.calendar-collapsible-content{padding:0 10px 10px}
+.calculation-autosave-note{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:8px 0 12px;border-radius:13px;background:#eef4ef;color:var(--muted);font-size:.82rem}
+.calculation-autosave-note b{color:var(--ok);font-size:.78rem}
+.calc-price-source{display:block;margin-top:4px;color:var(--muted);font-size:.7rem}
+.action-loader-spinner{width:58px;height:58px;margin:0 auto 14px;border:6px solid #d8d4c8;border-top-color:#171716;border-radius:50%;animation:cmeSpin .72s linear infinite}
+.action-loader-mark{width:62px;height:62px;margin-bottom:14px;animation:none}
+@keyframes cmeSpin{to{transform:rotate(360deg)}}
+.invoice-entry-card{margin:10px 0 18px}
+@media(max-width:700px){
+  .project-primary-actions{display:grid;grid-template-columns:1fr}
+  .project-primary-actions button{width:100%}
+  .calendar-collapsible summary{grid-template-columns:1fr auto}
+  .calendar-collapsible summary small{display:none}
+  .calculation-autosave-note{display:grid;gap:4px}
+}

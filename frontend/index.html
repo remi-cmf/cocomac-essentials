@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=598">
+  <link rel="stylesheet" href="./styles.css?v=599">
 </head>
 
 <body>
@@ -412,7 +412,7 @@
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="projectForm">
       <input id="projectEditId" type="hidden">
-      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2>
+      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2><p class="field-help">Bei bestehenden Projekten werden Änderungen beim Zurückgehen automatisch gespeichert.</p>
       <div class="form-columns">
         <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
         <label>Projektnummer<div id="projectNumberPreview" class="generated-number">Wird automatisch erzeugt</div></label>
@@ -551,9 +551,13 @@
       <input id="calculationProjectId" type="hidden">
       <small>COCOMAC ESSENTIAL</small>
       <h2>Buchungsüberblick</h2>
-      <p class="dialog-intro">Passe Preise und Sonderkonditionen nur für dieses Projekt an. Die Stammpreise des Equipments bleiben unverändert.</p>
-      <div class="calculation-save-bar calculation-save-bar-top"><button id="calculationSaveTopBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusTop" class="meta"></span></div>
-      <div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <p class="dialog-intro">Hier passt du Buchungsinformationen, Angebotspreise und Konditionen an und erstellst anschließend Beleg oder Rechnung. Änderungen werden automatisch gespeichert.</p>
+<div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <div class="calculation-autosave-note"><span>Änderungen werden automatisch gespeichert.</span><b id="calculationSaveStatusTop"></b><span id="calculationSaveStatusBottom" class="hidden"></span></div>
+      <section class="invoice-entry-card">
+        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
+        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
+      </section>
       <div class="calculation-bulk-panel">
         <div><small>ALLE POSITIONEN</small><b>Preisart gesammelt festlegen</b><span>Die Auswahl wird auf das gesamte Equipment dieser Buchung angewendet.</span></div>
         <label>Preisart für alle<select id="calculationBulkBillingType">
@@ -574,11 +578,7 @@
       </div>
       <label>Hinweis auf dem Beleg<textarea id="calculationNote" placeholder="z. B. Sonderkonditionen für Nachwuchsprojekt"></textarea></label>
       <div class="calculation-total"><span>Aktuelle Gesamtsumme</span><b id="calculationGrandTotal">0,00 €</b></div>
-      <section class="invoice-entry-card">
-        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
-        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
-      </section>
-      <hr>
+<hr>
       <h3>E-Mail-Versand</h3>
       <div class="form-columns">
         <label>Empfänger<input id="calculationEmailTo" type="text" placeholder="name@example.com"></label>
@@ -587,8 +587,7 @@
       </div>
       <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
       <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
-      <div class="calculation-save-bar"><button id="calculationSaveBottomBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusBottom" class="meta"></span></div>
-      <div class="project-actions calculation-document-actions">
+<div class="project-actions calculation-document-actions">
         <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
         <button id="calculationEmailBtn" type="button" class="ghost">Beleg per E-Mail senden</button>
       </div>
@@ -656,6 +655,7 @@
 
   <div id="actionLoader" class="action-loader hidden" aria-hidden="true" role="status" aria-live="assertive">
     <div class="action-loader-card">
+      <div class="action-loader-spinner" aria-hidden="true"></div>
       <div class="action-loader-mark"><span>CME</span></div>
       <strong id="actionLoaderTitle">Wird verarbeitet …</strong>
       <p id="actionLoaderDetail">Einen Moment bitte.</p>
@@ -663,7 +663,7 @@
     </div>
   </div>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.8</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 5.9.9</div>
 
   <div
     id="toast"
@@ -686,7 +686,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-5.9.8.js.
+  // Dieser Teil läuft unabhängig von app-5.9.9.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -726,6 +726,6 @@
 })();
 </script>
 
-<script src="./app-5.9.8.js" defer></script>
+<script src="./app-5.9.9.js" defer></script>
 </body>
 </html>
