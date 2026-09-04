@@ -676,7 +676,7 @@
     </div>
   </div>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 6.1.5</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 6.1.6</div>
 
   <div
     id="toast"
@@ -685,8 +685,7 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-  
+    
 <script>
 (function () {
   var startedAt = Date.now();
@@ -700,7 +699,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-6.1.5.js.
+  // Dieser Teil läuft unabhängig von app-6.1.6.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -740,6 +739,6 @@
 })();
 </script>
 
-<script src="./app-6.1.5.js?v=6.1.5" defer></script>
+<script src="./app-6.1.6.js?v=6.1.6" defer></script>
 </body>
 </html>

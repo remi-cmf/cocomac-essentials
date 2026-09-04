@@ -736,3 +736,48 @@ textarea { resize: vertical; }
 /* QR download / label sheets - v6.1.5 */
 .qr-download-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;margin:12px 0;background:#fff;border:1px solid var(--line,#ddd8cc);border-radius:16px}.qr-download-copy{display:flex;flex-direction:column;gap:3px;min-width:220px}.qr-download-copy small{color:var(--muted,#6d6b64);line-height:1.35}.qr-download-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.qr-download-actions button:disabled{opacity:.45;cursor:not-allowed}.qr-database-row{grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center}.qr-select-wrap{display:flex;align-items:center;justify-content:center;width:28px}.qr-select-wrap input{width:18px;height:18px;accent-color:#171716;cursor:pointer}.qr-database-row.is-selected{outline:2px solid #171716;outline-offset:-2px}.qr-selected-pill{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;margin-left:4px;border-radius:999px;background:#f0ede4;font-size:12px;font-weight:800}.qr-download-hidden-maker{position:fixed;left:-99999px;top:-99999px;width:512px;height:512px;pointer-events:none;opacity:0}
 @media(max-width:800px){.qr-download-toolbar{align-items:stretch;flex-direction:column}.qr-download-actions{justify-content:stretch}.qr-download-actions button{flex:1 1 46%}.qr-database-row{grid-template-columns:auto auto minmax(0,1fr)}.qr-database-row .admin-row-actions{grid-column:2 / -1;justify-content:flex-start;flex-wrap:wrap}}
+
+
+/* QR database layout + local PDF support - v6.1.6 */
+.qr-database-row{
+  display:grid!important;
+  grid-template-columns:28px 48px minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:12px!important;
+  min-height:72px!important;
+  padding:10px 12px!important;
+  overflow:visible!important;
+}
+.qr-database-row .qr-database-icon{
+  width:48px!important;height:48px!important;min-width:48px!important;
+}
+.qr-database-row .admin-row-actions{
+  grid-column:auto!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:7px!important;
+  width:auto!important;
+  min-width:0!important;
+}
+.qr-database-row .admin-row-actions button{
+  width:auto!important;
+  min-height:36px!important;
+  padding:8px 10px!important;
+  white-space:nowrap!important;
+  font-size:.82rem!important;
+}
+.qr-select-wrap{width:28px!important;min-width:28px!important}
+@media(max-width:800px){
+  .qr-database-row{
+    grid-template-columns:28px 46px minmax(0,1fr)!important;
+  }
+  .qr-database-row .qr-database-icon{width:46px!important;height:46px!important;min-width:46px!important}
+  .qr-database-row .admin-row-actions{
+    grid-column:2 / -1!important;
+    justify-content:flex-start!important;
+    flex-wrap:wrap!important;
+  }
+  .qr-database-row .admin-row-actions button{width:auto!important;flex:0 0 auto!important}
+}
