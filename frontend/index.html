@@ -150,7 +150,7 @@
           <button id="repairQrDatabaseBtn" type="button" class="ghost">Bestehende Produkte registrieren</button>
         </div>
         <div class="qr-download-toolbar">
-          <div class="qr-download-copy"><b>QR-Codes herunterladen</b><small>Einzelne Codes direkt als PNG laden oder mehrere Codes auswählen und platzsparend auf A4 als PDF ausgeben.</small></div>
+          <div class="qr-download-copy"><b>QR-Codes herunterladen</b><small>Einzelne Codes direkt als PNG laden. Für die Auswahl kannst du pro Produkt festlegen, wie oft das Etikett im A4-PDF vorkommen soll, maximal bis zum vorhandenen Bestand.</small></div>
           <div class="qr-download-actions">
             <button id="selectVisibleQrBtn" type="button" class="ghost">Sichtbare auswählen</button>
             <button id="clearQrSelectionBtn" type="button" class="ghost">Auswahl löschen</button>
@@ -676,7 +676,7 @@
     </div>
   </div>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 6.1.7</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 6.1.8</div>
 
   <div
     id="toast"
@@ -699,7 +699,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-6.1.7.js.
+  // Dieser Teil läuft unabhängig von app-6.1.8.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -739,6 +739,6 @@
 })();
 </script>
 
-<script src="./app-6.1.7.js?v=6.1.7" defer></script>
+<script src="./app-6.1.8.js?v=6.1.8" defer></script>
 </body>
 </html>

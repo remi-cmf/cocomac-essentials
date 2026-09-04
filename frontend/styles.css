@@ -781,3 +781,15 @@ textarea { resize: vertical; }
   }
   .qr-database-row .admin-row-actions button{width:auto!important;flex:0 0 auto!important}
 }
+
+
+/* V6.1.8 – Druckmenge pro QR-Code */
+.qr-database-copy{min-width:0;flex:1}
+.qr-row-actions{align-items:center;flex-wrap:wrap}
+.qr-print-quantity{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:5px 9px;border:1px solid var(--line,#ddd8cc);border-radius:12px;background:#fff;font-size:12px;font-weight:800;white-space:nowrap}
+.qr-print-quantity>span{opacity:.65;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
+.qr-print-quantity input{width:54px;height:30px;padding:4px 6px;border:1px solid var(--line,#d8d4ca);border-radius:8px;background:#faf9f5;color:inherit;font:inherit;font-weight:800;text-align:center}
+.qr-print-quantity small{font-size:11px;opacity:.62}
+.qr-print-quantity.is-fixed{padding-inline:11px}
+.qr-print-quantity.is-fixed b{font-size:13px}
+@media(max-width:760px){.qr-row-actions{width:100%;justify-content:flex-start}.qr-print-quantity{order:-1}.qr-print-quantity input{width:50px}}
