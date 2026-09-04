@@ -147,6 +147,7 @@
           <label>Anzahl neuer QR-Codes<input id="qrBatchCount" type="number" min="1" max="1000" step="1" value="100"></label>
           <button id="generateQrBatchBtn" type="button">QR-Codes erzeugen</button>
           <button id="downloadQrCsvBtn" type="button" class="ghost">Freie Codes als CSV</button>
+          <button id="repairQrDatabaseBtn" type="button" class="ghost">Bestehende Produkte registrieren</button>
         </div>
         <div id="qrDatabaseSummary" class="admin-intro">QR-Code-Datenbank wird geladen …</div>
         <div class="qr-database-tabs" role="tablist" aria-label="QR-Code-Status">
@@ -666,7 +667,7 @@
     </div>
   </div>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 6.1.3</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 6.1.4</div>
 
   <div
     id="toast"
@@ -689,7 +690,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-6.1.3.js.
+  // Dieser Teil läuft unabhängig von app-6.1.4.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -729,6 +730,6 @@
 })();
 </script>
 
-<script src="./app-6.1.3.js?v=6.1.3" defer></script>
+<script src="./app-6.1.4.js?v=6.1.4" defer></script>
 </body>
 </html>
