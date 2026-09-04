@@ -2143,11 +2143,30 @@ function renderQrDatabase() {
     const product = productById.get(String(code.productId || ''));
     const assignedText = product ? `${product.name} · ${code.productId}` : (code.productId || 'Noch keinem Produkt zugeordnet');
     const dateText = code.status === 'zugeordnet' && code.assignedAt ? `Zugeordnet: ${formatDate(code.assignedAt)}` : code.createdAt ? `Erzeugt: ${formatDate(code.createdAt)}` : '';
-    return `<div class="admin-product-row qr-database-row"><div class="qr-database-icon">QR</div><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><b>${escapeHtml(assignedText)}</b><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${code.status === 'frei' ? 'Neu / frei' : 'Aktiv vergeben'}${dateText ? ` · ${escapeHtml(dateText)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button>${code.productId ? `<button type="button" class="ghost" data-open-qr-product="${escapeHtml(code.productId)}">Produkt öffnen</button>` : ''}</div></div>`;
+    return `<div class="admin-product-row qr-database-row"><div class="qr-database-icon">QR</div><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><b>${escapeHtml(assignedText)}</b><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${code.status === 'frei' ? 'Neu / frei' : 'Aktiv vergeben'}${dateText ? ` · ${escapeHtml(dateText)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button>${code.productId ? `<button type="button" class="ghost" data-qr-history="${escapeHtml(code.qrCode)}" data-product-id="${escapeHtml(code.productId)}">Historie</button><button type="button" class="ghost" data-open-qr-product="${escapeHtml(code.productId)}">Produkt öffnen</button>` : ''}</div></div>`;
   }).join('') || '<div class="empty-state">Für diesen Filter wurden keine QR-Codes gefunden.</div>';
   $$('[data-copy-qr]').forEach(button => button.onclick = async () => { await navigator.clipboard.writeText(button.dataset.copyQr); toast('QR-Code kopiert.'); });
   $$('[data-open-qr-product]').forEach(button => button.onclick = () => openProductDialog(button.dataset.openQrProduct));
+  $$('[data-qr-history]').forEach(button => button.onclick = () => openQrHistory(button.dataset.qrHistory, button.dataset.productId));
 }
+
+async function openQrHistory(qrCode, productId) {
+  try {
+    const result = await sendCloudJsonpAction('listQrHistory', adminPayload({ qrCode, productId }));
+    const history = result?.history || {};
+    const product = catalog.find(item => String(item.id) === String(productId));
+    let dialog = $('#qrHistoryDialog');
+    if (!dialog) {
+      dialog = document.createElement('dialog'); dialog.id = 'qrHistoryDialog'; dialog.className = 'dialog'; document.body.appendChild(dialog);
+    }
+    const scans = (history.scans || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.event || 'Scan')}</b><small>${escapeHtml(formatDate(x.timestamp))}${x.context ? ` · ${escapeHtml(x.context)}` : ''}${x.location ? ` · ${escapeHtml(x.location)}` : ''}</small></div></div>`).join('') || '<div class="empty-state">Noch keine Scans protokolliert. Die Aufzeichnung beginnt mit dieser Version.</div>';
+    const projectsHtml = (history.projects || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.projectName || x.projectId)}</b><small>${escapeHtml(formatDate(x.from))} – ${escapeHtml(formatDate(x.to))} · ${escapeHtml(x.status || '')} · ${Number(x.quantity||0)} Stk.</small></div></div>`).join('') || '<div class="empty-state">Keine Projektzuordnungen gefunden.</div>';
+    const movements = (history.movements || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.action || 'Bewegung')}</b><small>${escapeHtml(formatDate(x.timestamp))}${x.projectId ? ` · ${escapeHtml(x.projectId)}` : ''}${x.location ? ` · ${escapeHtml(x.location)}` : ''}</small></div></div>`).join('') || '<div class="empty-state">Keine Buchungen gefunden.</div>';
+    dialog.innerHTML = `<form method="dialog"><button class="dialog-close" aria-label="Schließen">×</button></form><h2>QR-Historie</h2><p><b>${escapeHtml(qrCode)}</b><br>${escapeHtml(product?.name || productId)} · ${escapeHtml(productId)}</p><h3>Scans (${(history.scans||[]).length})</h3>${scans}<h3>Projekte (${(history.projects||[]).length})</h3>${projectsHtml}<h3>Bewegungen (${(history.movements||[]).length})</h3>${movements}`;
+    dialog.showModal();
+  } catch (error) { toast('Historie konnte nicht geladen werden: ' + error.message); }
+}
+
 async function generateQrBatch() {
   if (!(await ensureAdminAccess())) return;
   const count = Math.max(1, Math.min(1000, Math.round(Number($('#qrBatchCount').value || 100))));
@@ -2261,7 +2280,7 @@ async function resolveScannedProductId(value) {
   const qrCode = normalizeQrCode(value);
   if (!qrCode) return String(value || '').toUpperCase();
   if (!settings().cloudMode) return '';
-  const result = await sendCloudJsonpAction('resolveQrCode', { qrCode });
+  const result = await sendCloudJsonpAction('resolveQrCode', { qrCode, context: scanTarget || 'Scan' });
   return String(result?.productId || '').toUpperCase();
 }
 
