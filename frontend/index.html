@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=612">
+  <link rel="stylesheet" href="./styles.css?v=600">
 </head>
 
 <body>
@@ -147,16 +147,6 @@
           <label>Anzahl neuer QR-Codes<input id="qrBatchCount" type="number" min="1" max="1000" step="1" value="100"></label>
           <button id="generateQrBatchBtn" type="button">QR-Codes erzeugen</button>
           <button id="downloadQrCsvBtn" type="button" class="ghost">Freie Codes als CSV</button>
-          <button id="repairQrDatabaseBtn" type="button" class="ghost">Bestehende Produkte registrieren</button>
-        </div>
-        <div class="qr-download-toolbar">
-          <div class="qr-download-copy"><b>QR-Codes herunterladen</b><small>Einzelne Codes direkt als PNG laden. Für die Auswahl kannst du pro Produkt festlegen, wie oft das Etikett im A4-PDF vorkommen soll, maximal bis zum vorhandenen Bestand.</small></div>
-          <div class="qr-download-actions">
-            <button id="selectVisibleQrBtn" type="button" class="ghost">Sichtbare auswählen</button>
-            <button id="clearQrSelectionBtn" type="button" class="ghost">Auswahl löschen</button>
-            <button id="downloadSelectedQrBtn" type="button" disabled>Auswahl herunterladen <span id="qrSelectedCount">0</span></button>
-            <button id="downloadAllQrPdfBtn" type="button" class="ghost">Alle als PDF</button>
-          </div>
         </div>
         <div id="qrDatabaseSummary" class="admin-intro">QR-Code-Datenbank wird geladen …</div>
         <div class="qr-database-tabs" role="tablist" aria-label="QR-Code-Status">
@@ -676,7 +666,7 @@
     </div>
   </div>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 6.1.10</div>
+  <div id="appVersionBadge" class="app-version-badge">Version 6.0.0</div>
 
   <div
     id="toast"
@@ -685,7 +675,7 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
+  
 <script>
 (function () {
   var startedAt = Date.now();
@@ -699,7 +689,7 @@
     if (copy && text) copy.textContent = text;
   }
 
-  // Dieser Teil läuft unabhängig von app-6.1.10.js.
+  // Dieser Teil läuft unabhängig von app-6.0.0.js.
   // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
   setStartup(5, 'App wird gestartet …');
 
@@ -739,6 +729,6 @@
 })();
 </script>
 
-<script src="./app-6.1.10.js?v=6.1.10" defer></script>
+<script src="./app-6.0.0.js" defer></script>
 </body>
 </html>
