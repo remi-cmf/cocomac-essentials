@@ -665,3 +665,6 @@ textarea { resize: vertical; }
 .email-send-details[open] summary b{transform:rotate(90deg)}
 .email-send-details-content{padding:0 15px 15px}
 @media(max-width:700px){.email-send-details summary{grid-template-columns:1fr auto}.email-send-details summary small{display:none}}
+
+/* V6.1.3 Cocomac Rechnungen */
+.standalone-invoice-form{margin:18px 0 28px}.si-line{display:grid;grid-template-columns:minmax(240px,2fr) minmax(90px,.5fr) minmax(140px,.7fr) auto;gap:12px;align-items:end;padding:12px 0;border-bottom:1px solid var(--line,#dedbd2)}.standalone-archive-heading{margin-top:28px}@media(max-width:760px){.si-line{grid-template-columns:1fr 1fr}.si-line label:first-child{grid-column:1/-1}}

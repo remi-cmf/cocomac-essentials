@@ -1,3 +1,4 @@
+if (window.__cmeAppStarted) window.__cmeAppStarted();
 
 function setBootProgress(percent, text) {
   const safe = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
@@ -57,6 +58,26 @@ let qrCodes = [];
 let productQrScanReturnDialog = null;
 let inventoryCounts = {};
 let calculationDirty = false;
+
+let actionLoaderDepth = 0;
+function showActionLoader(title='Wird verarbeitet …', detail='Einen Moment bitte.') {
+  actionLoaderDepth += 1;
+  const overlay = $('#actionLoader');
+  if (!overlay) return;
+  $('#actionLoaderTitle').textContent = title;
+  $('#actionLoaderDetail').textContent = detail;
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+function hideActionLoader() {
+  actionLoaderDepth = Math.max(0, actionLoaderDepth - 1);
+  if (actionLoaderDepth > 0) return;
+  const overlay = $('#actionLoader');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
 let activeInvoice = null;
 let qrDatabaseFilter = 'all';
 const calendarAnchors = new Map();
@@ -970,6 +991,14 @@ async function submitProduct(event) {
     if (pos >= 0) catalog[pos] = savedProduct; else catalog.unshift(savedProduct);
     selectedProductImage = null;
     render();
+    if (activeCalculation) {
+      activeCalculation.lines.forEach(line => {
+        if (line.productId === savedProduct.id && line.priceOverride !== true) {
+          line.unitPrice = Number(savedProduct.dailyPrice || 0);
+          line.catalogUnitPrice = Number(savedProduct.dailyPrice || 0);
+        }
+      });
+    }
     status.textContent = savedProduct.imageUrl ? 'Produkt und Foto wurden gespeichert.' : 'Produkt wurde gespeichert.';
     toast(status.textContent);
     setTimeout(() => { if ($('#productDialog')?.open) $('#productDialog').close(); }, 450);
@@ -1179,6 +1208,7 @@ function openAdminModule(moduleId) {
   $('.admin-module-grid')?.classList.add('hidden');
   if (moduleId === 'inventoryModule') { loadInventoryDraft(); renderInventory(); }
   if (moduleId === 'productsModule') renderAdminProducts();
+  if (moduleId === 'invoicesModule') loadStandaloneInvoices();
   document.getElementById(moduleId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1218,6 +1248,15 @@ function bind() {
   $('#invoicePreviewBtn').onclick = previewInvoice;
   $('#invoiceOpenPdfBtn').onclick = openCreatedInvoicePdf;
   $('#invoiceEmailBtn').onclick = emailCreatedInvoice;
+  bindStandaloneInvoices();
+  ['invoiceCustomerCompany','invoiceCustomerName','invoiceCustomerStreet','invoiceCustomerPostalCode','invoiceCustomerCity','invoiceCustomerCountry','invoiceCustomerEmail'].forEach(id => {
+    const el = $('#'+id);
+    if (el) el.addEventListener('input', scheduleInvoiceProfileSave);
+  });
+  $('#invoiceDialog')?.addEventListener('close', () => {
+    clearTimeout(invoiceProfileSaveTimer);
+    persistInvoiceProfile({force:true});
+  });
   ['calculationDiscount','calculationExtraCost','calculationExtraLabel','calculationTaxMode'].forEach(id => {
     const el = $('#'+id); if (el) el.oninput = el.onchange = updateCalculationTotal;
   });
@@ -1266,14 +1305,18 @@ function bind() {
   $('#inventoryResetBtn').onclick = resetInventory;
   $('#inventoryDraftBtn').onclick = saveInventoryDraftManually;
   $('#inventorySaveBtn').onclick = saveInventory;
-  $('#calculationSaveTopBtn').onclick = saveProjectCalculation;
-  $('#calculationSaveBottomBtn').onclick = saveProjectCalculation;
   if ($('#calculationBulkBillingType')) $('#calculationBulkBillingType').onchange = applyBillingTypeToAll;
 
   $$('[data-close]').forEach(button => {
     button.onclick = async () => {
       const dialog = button.closest('dialog');
       if (dialog.id === 'scanDialog') await stopCameraScan();
+      if (dialog.id === 'projectCalculationDialog') await flushCalculationAutosave();
+      if (dialog.id === 'projectDialog' && $('#projectEditId')?.value) await autosaveProjectInfoBeforeClose();
+      if (dialog.id === 'invoiceDialog') {
+        clearTimeout(invoiceProfileSaveTimer);
+        await persistInvoiceProfile({force:true, notify:true});
+      }
       dialog.close();
       if (dialog.id === 'scanDialog' && scanTarget === 'reservation' && reservationScanSnapshot) {
         restoreReservationAfterScan('');
@@ -1443,7 +1486,14 @@ function normalizeProject(item) {
   return {
     id: String(item.id || ''), name: String(item.name || ''), number,
     contact: String(item.contact || ''), email1: String(item.email1 || ''), email2: String(item.email2 || ''),
-    start: dateOnly(item.start), end: dateOnly(item.end), status: String(item.status || 'Reserviert'), notes: String(item.notes || '')
+    start: dateOnly(item.start), end: dateOnly(item.end), status: String(item.status || 'Reserviert'), notes: String(item.notes || ''),
+    invoiceCompany: String(item.invoiceCompany || ''),
+    invoiceName: String(item.invoiceName || ''),
+    invoiceStreet: String(item.invoiceStreet || ''),
+    invoicePostalCode: String(item.invoicePostalCode || ''),
+    invoiceCity: String(item.invoiceCity || ''),
+    invoiceCountry: String(item.invoiceCountry || 'Deutschland'),
+    invoiceEmail: String(item.invoiceEmail || '')
   };
 }
 function normalizeReservation(item) {
@@ -1473,7 +1523,14 @@ function formatDate(value) {
   const [y,m,d] = value.split('-'); return `${d}.${m}.${y}`;
 }
 function todayIso() { return new Date().toISOString().slice(0,10); }
-function addDaysIso(days) { const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function addDaysIso(isoOrDays, maybeDays) {
+  const hasExplicitIso = typeof maybeDays !== 'undefined';
+  const baseIso = hasExplicitIso ? String(isoOrDays || todayIso()) : todayIso();
+  const days = Number(hasExplicitIso ? maybeDays : isoOrDays || 0);
+  const d = new Date(baseIso + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
 function rangesOverlap(a1,a2,b1,b2) { return a1 <= b2 && b1 <= a2; }
 function reservedQuantity(productId, from, to, ignoreId='') {
   return reservations.filter(r => r.id !== ignoreId && r.productId === productId && !['Storniert','Zurückgegeben','Freigegeben'].includes(r.status) && (r.status === 'Defekt' || rangesOverlap(r.from,r.to,from,to)))
@@ -1549,12 +1606,19 @@ function openProjectDialog(projectId = '') {
   $('#projectEditId').value = projectId;
   const project = projects.find(item => item.id === projectId);
   if (project) {
-    $('#projectDialogTitle').textContent = 'Projekt bearbeiten';
-    $('#projectSubmitBtn').textContent = 'Änderungen speichern';
+    $('#projectDialogTitle').textContent = 'Projektinfos anpassen';
+    $('#projectSubmitBtn').classList.add('hidden');
     $('#projectName').value = project.name;
     $('#projectContact').value = project.contact;
     $('#projectEmail1').value = project.email1;
     $('#projectEmail2').value = project.email2;
+    $('#projectInvoiceCompany').value = project.invoiceCompany || '';
+    $('#projectInvoiceName').value = project.invoiceName || '';
+    $('#projectInvoiceStreet').value = project.invoiceStreet || '';
+    $('#projectInvoicePostalCode').value = project.invoicePostalCode || '';
+    $('#projectInvoiceCity').value = project.invoiceCity || '';
+    $('#projectInvoiceCountry').value = project.invoiceCountry || 'Deutschland';
+    $('#projectInvoiceEmail').value = project.invoiceEmail || '';
     $('#projectStatus').value = project.status || 'Reserviert';
     $('#projectStart').value = project.start;
     $('#projectEnd').value = project.end;
@@ -1562,13 +1626,59 @@ function openProjectDialog(projectId = '') {
     $('#projectNumberPreview').textContent = project.number || project.id;
   } else {
     $('#projectDialogTitle').textContent = 'Neues Projekt';
-    $('#projectSubmitBtn').textContent = 'Projekt speichern';
+    $('#projectSubmitBtn').classList.remove('hidden');
+    $('#projectSubmitBtn').textContent = 'Projekt anlegen';
     $('#projectStart').value=todayIso();
     $('#projectEnd').value=addDaysIso(7);
+    $('#projectInvoiceCountry').value='Deutschland';
     updateProjectNumberPreview();
   }
   $('#projectDialog').showModal();
 }
+
+function currentProjectFromForm() {
+  const editId = $('#projectEditId')?.value || '';
+  const existing = projects.find(item => item.id === editId);
+  if (!existing) return null;
+  return normalizeProject({
+    ...existing,
+    name:$('#projectName').value.trim(),
+    contact:$('#projectContact').value.trim(),
+    email1:$('#projectEmail1').value.trim(),
+    email2:$('#projectEmail2').value.trim(),
+    start:$('#projectStart').value,
+    end:$('#projectEnd').value,
+    notes:$('#projectNotes').value.trim(),
+    invoiceCompany:$('#projectInvoiceCompany').value.trim(),
+    invoiceName:$('#projectInvoiceName').value.trim(),
+    invoiceStreet:$('#projectInvoiceStreet').value.trim(),
+    invoicePostalCode:$('#projectInvoicePostalCode').value.trim(),
+    invoiceCity:$('#projectInvoiceCity').value.trim(),
+    invoiceCountry:$('#projectInvoiceCountry').value.trim() || 'Deutschland',
+    invoiceEmail:$('#projectInvoiceEmail').value.trim()
+  });
+}
+
+async function autosaveProjectInfoBeforeClose() {
+  const project = currentProjectFromForm();
+  if (!project) return;
+  if (!project.name || !project.start || !project.end || project.end < project.start) {
+    toast('Projektinfos konnten nicht automatisch gespeichert werden. Bitte Zeitraum und Projektname prüfen.');
+    return;
+  }
+  const index = projects.findIndex(item => item.id === project.id);
+  if (index >= 0) projects[index] = project;
+  render();
+  showActionLoader('Projektinfos werden gespeichert', 'Ansprechpartner, Zeitraum und Rechnungsdaten werden synchronisiert …');
+  try {
+    if (settings().cloudMode) await sendCloudJsonpAction('saveProject', project, 30000);
+  } catch (error) {
+    toast('Projektinfos konnten nicht automatisch gespeichert werden: ' + error.message);
+  } finally {
+    hideActionLoader();
+  }
+}
+
 function projectNameCode(name) {
   const words = String(name || '')
     .normalize('NFD')
@@ -1612,7 +1722,25 @@ async function submitProject(event) {
   const editId = $('#projectEditId').value;
   const existing = projects.find(item => item.id === editId);
   const generatedNumber = existing?.number || existing?.id || nextProjectNumber($('#projectName').value.trim(), $('#projectStart').value);
-  const project=normalizeProject({ id:existing?.id || generatedNumber, name:$('#projectName').value.trim(), number:generatedNumber, contact:$('#projectContact').value.trim(), email1:$('#projectEmail1').value.trim(), email2:$('#projectEmail2').value.trim(), start:$('#projectStart').value, end:$('#projectEnd').value, status:existing?.status || $('#projectStatus').value || 'Reserviert', notes:$('#projectNotes').value.trim() });
+  const project=normalizeProject({
+    id:existing?.id || generatedNumber,
+    name:$('#projectName').value.trim(),
+    number:generatedNumber,
+    contact:$('#projectContact').value.trim(),
+    email1:$('#projectEmail1').value.trim(),
+    email2:$('#projectEmail2').value.trim(),
+    start:$('#projectStart').value,
+    end:$('#projectEnd').value,
+    status:existing?.status || $('#projectStatus').value || 'Reserviert',
+    notes:$('#projectNotes').value.trim(),
+    invoiceCompany:$('#projectInvoiceCompany').value.trim(),
+    invoiceName:$('#projectInvoiceName').value.trim(),
+    invoiceStreet:$('#projectInvoiceStreet').value.trim(),
+    invoicePostalCode:$('#projectInvoicePostalCode').value.trim(),
+    invoiceCity:$('#projectInvoiceCity').value.trim(),
+    invoiceCountry:$('#projectInvoiceCountry').value.trim() || 'Deutschland',
+    invoiceEmail:$('#projectInvoiceEmail').value.trim()
+  });
   if(!project.name || !project.start || !project.end) return toast('Bitte Projektname und Zeitraum eintragen.');
   if(project.end < project.start) return toast('Das Enddatum darf nicht vor dem Startdatum liegen.');
   const previousProjects = [...projects];
@@ -1621,11 +1749,14 @@ async function submitProject(event) {
   projects.sort((a,b) => String(b.start).localeCompare(String(a.start)));
   render(); $('#projectDialog').close(); showPage('projectsPage'); openProjectDetail(project.id);
   toast('Projekt gespeichert. Synchronisierung läuft im Hintergrund.');
+  if (settings().cloudMode) showActionLoader('Projekt wird gespeichert', 'Projekt- und Rechnungsdaten werden synchronisiert …');
   try {
     if(settings().cloudMode) await sendCloudJsonpAction('saveProject',project);
   } catch (error) {
     projects = previousProjects; render();
     toast('Projekt konnte nicht synchronisiert werden: ' + error.message);
+  } finally {
+    if (settings().cloudMode) hideActionLoader();
   }
 }
 function projectReservations(projectId) { return reservations.filter(r=>r.projectId===projectId && r.status!=='Storniert'); }
@@ -1668,6 +1799,7 @@ function openProjectDetail(projectId, refreshOnly = false) {
   const rows=projectReservations(p.id);
   const workflowStatus = projectWorkflowStatus(p);
   $('#projectDetailContent').innerHTML=`<small>COCOMAC ESSENTIAL</small><h2>${escapeHtml(p.name)}</h2>
+    <div class="project-actions project-primary-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projektinfos anpassen</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div>
     <div class="project-period-hero"><small>PROJEKTZEITRAUM</small><b>${formatDate(p.start)} bis ${formatDate(p.end)}</b><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>
     ${buildProjectCalendarOverview(p, rows)}
     <div class="project-status-panel">
@@ -1678,7 +1810,6 @@ function openProjectDetail(projectId, refreshOnly = false) {
         <button type="button" class="project-status-step ${workflowStatus==='Zurückgegeben'?'active':''}" data-project-status="Zurückgegeben"><span>3</span><b>Zurückgebracht</b><small>Equipment zurück im Lager</small></button>
       </div>
     </div>
-    <div class="project-actions"><button id="addReservationBtn" type="button">+ Equipment hinzufügen</button><button id="editProjectBtn" type="button" class="ghost">Projekt bearbeiten</button><button id="projectCalculationBtn" type="button" class="ghost">Buchungsüberblick</button></div>
     <div class="project-equipment-heading"><div><small>EQUIPMENT</small><h3>${rows.length} Position${rows.length===1?'':'en'}</h3></div><span>Menge direkt anpassen</span></div>
     <div class="booking-table">${rows.length?rows.map(r=>{const item=catalog.find(x=>x.id===r.productId); const image=productImageSource(item||{}); return `<article class="project-equipment-row"><button type="button" class="project-equipment-main" data-equipment-calendar="${escapeHtml(r.productId)}"><span class="project-equipment-image">${image?`<img src="${escapeHtml(image)}" alt="">`:'CME'}</span><span><b>${escapeHtml(item?.name||r.productId)}</b><small>${formatDate(r.from)}–${formatDate(r.to)}</small></span></button><div class="project-equipment-quantity"><button type="button" class="ghost" data-project-qty-minus="${escapeHtml(r.id)}" aria-label="Menge verringern">−</button><b>${r.quantity}</b><button type="button" data-project-qty-plus="${escapeHtml(r.id)}" aria-label="Menge erhöhen">+</button></div><button type="button" class="project-equipment-edit ghost" data-edit-reservation="${escapeHtml(r.id)}">Bearbeiten</button></article>`}).join(''):'<div class="empty-state">Noch kein Equipment zugeordnet.</div>'}</div>`;
   $('#addReservationBtn').onclick=()=>openReservationDialog(p.id);
@@ -2265,7 +2396,8 @@ function calendarMonthHtml(anchorDate, bookingRows = [], highlightRange = null, 
 }
 function buildNavigableCalendar(key, defaultAnchor, rows, range=null){
   if(!calendarAnchors.has(key)) calendarAnchors.set(key, defaultAnchor||todayIso());
-  return calendarMonthHtml(calendarAnchors.get(key),rows,range,key);
+  const calendar = calendarMonthHtml(calendarAnchors.get(key),rows,range,key);
+  return `<details class="calendar-collapsible"><summary><span>Kalender</span><small>Monatsübersicht anzeigen</small><b>›</b></summary><div class="calendar-collapsible-content">${calendar}</div></details>`;
 }
 function bindCalendarNavigation(root=document){
   root.querySelectorAll?.('[data-calendar-direction]').forEach(button=>button.onclick=()=>{
@@ -2276,7 +2408,7 @@ function bindCalendarNavigation(root=document){
   });
 }
 function buildProjectCalendarOverview(project, rows) {
-  return `<section class="project-calendar-overview"><div class="project-calendar-heading"><div><small>AUSLASTUNG</small><b>Monatsübersicht</b></div><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>${buildNavigableCalendar(`project-${project.id}`,project.start||todayIso(),rows,{start:project.start,end:project.end})}</section>`;
+  return `<section class="project-calendar-overview compact"><div class="project-calendar-heading"><div><small>AUSLASTUNG</small><b>Kalender</b></div><span>${rows.reduce((sum,row)=>sum+Number(row.quantity||0),0)} Teile</span></div>${buildNavigableCalendar(`project-${project.id}`,project.start||todayIso(),rows,{start:project.start,end:project.end})}</section>`;
 }
 function openEquipmentCalendar(productId, refreshOnly=false) {
   const item=catalog.find(product=>product.id===productId); if(!item) return;
@@ -2317,6 +2449,8 @@ function buildDefaultCalculation(projectId) {
       to: reservation.to,
       days,
       unitPrice: Number(product?.dailyPrice || 0),
+      priceOverride: false,
+      catalogUnitPrice: Number(product?.dailyPrice || 0),
       billingType: 'fixed',
       discount: 0,
       free: false
@@ -2365,7 +2499,8 @@ async function openProjectCalculation(projectId) {
   renderCalculationRows();
   setCalculationSaveStatus('');
   $('#projectCalculationDialog').showModal();
-  $('#projectCalculationForm').oninput = () => { calculationDirty=true; setCalculationSaveStatus('Ungespeicherte Änderungen'); };
+  $('#projectCalculationForm').oninput = scheduleCalculationAutosave;
+  $('#projectCalculationForm').onchange = scheduleCalculationAutosave;
 }
 
 function renderCalculationRows() {
@@ -2380,7 +2515,7 @@ function renderCalculationRows() {
       <div class="calculation-fields">
         <label>Menge<input data-calc-field="quantity" type="number" min="0" step="1" value="${line.quantity}"></label>
         <label>Preisart<select data-calc-field="billingType"><option value="fixed" ${line.billingType==='fixed'?'selected':''}>Fixpreis</option><option value="daily" ${line.billingType==='daily'?'selected':''}>Tagespreis</option><option value="weekly" ${line.billingType==='weekly'?'selected':''}>Wochenpreis</option><option value="monthly" ${line.billingType==='monthly'?'selected':''}>Monatspreis</option></select></label>
-        <label><span data-price-label>${billingPriceLabel(line.billingType)}</span><input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"></label>
+        <label><span data-price-label>${billingPriceLabel(line.billingType)}${line.priceOverride?' · Projektpreis':''}</span><input data-calc-field="unitPrice" type="number" min="0" step="0.01" value="${line.unitPrice}"><small class="calc-price-source">${line.priceOverride?'Projektpreis':'Stammpreis aus Administration'}</small></label>
         <label>Rabatt %<input data-calc-field="discount" type="number" min="0" max="100" step="1" inputmode="numeric" value="${Math.round(Number(line.discount || 0))}"></label>
         <label class="checkbox-line calculation-free"><input data-calc-field="free" type="checkbox" ${line.free?'checked':''}> Kostenlos</label>
       </div>
@@ -2392,11 +2527,18 @@ function renderCalculationRows() {
       input.oninput = input.onchange = () => {
         const field = input.dataset.calcField;
         if (field === 'free') activeCalculation.lines[index][field] = input.checked;
-        else if (field === 'billingType') { activeCalculation.lines[index][field] = input.value; const priceLabel=row.querySelector('[data-price-label]'); if(priceLabel) priceLabel.textContent=billingPriceLabel(input.value); }
+        else if (field === 'billingType') { activeCalculation.lines[index][field] = input.value; const priceLabel=row.querySelector('[data-price-label]'); if(priceLabel) priceLabel.textContent=billingPriceLabel(input.value) + (activeCalculation.lines[index].priceOverride?' · Projektpreis':''); }
         else if (field === 'discount') { const rounded=Math.min(100,Math.max(0,Math.round(Number(input.value||0)))); input.value=String(rounded); activeCalculation.lines[index][field]=rounded; }
-        else activeCalculation.lines[index][field]=Number(input.value||0);
+        else if (field === 'unitPrice') {
+          activeCalculation.lines[index][field]=Number(input.value||0);
+          activeCalculation.lines[index].priceOverride = true;
+          const priceLabel=row.querySelector('[data-price-label]');
+          if(priceLabel) priceLabel.textContent=billingPriceLabel(activeCalculation.lines[index].billingType) + ' · Projektpreis';
+          const source=row.querySelector('.calc-price-source');
+          if(source) source.textContent='Projektpreis';
+        } else activeCalculation.lines[index][field]=Number(input.value||0);
         calculationDirty = true;
-        setCalculationSaveStatus('Ungespeicherte Änderungen');
+        scheduleCalculationAutosave();
         const line=activeCalculation.lines[index];
         const total=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*billingUnits(line)*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
         const totalEl=row.querySelector('[data-line-total]'); if(totalEl) totalEl.textContent=euro(total);
@@ -2413,7 +2555,7 @@ function applyBillingTypeToAll() {
   if(!type||!activeCalculation) return;
   activeCalculation.lines.forEach(line=>{line.billingType=type;});
   calculationDirty=true;
-  setCalculationSaveStatus('Ungespeicherte Änderungen');
+  scheduleCalculationAutosave();
   renderCalculationRows();
   select.value='';
   toast(`${billingTypeLabel(type)} wurde für alle Positionen übernommen.`);
@@ -2422,7 +2564,17 @@ function mergeSavedCalculation(base, saved) {
   const savedLines = new Map((saved.lines || []).map(line => [line.reservationId || line.productId, line]));
   return {
     ...base, ...saved,
-    lines: base.lines.map(line => ({...line, ...(savedLines.get(line.reservationId) || savedLines.get(line.productId) || {})})),
+    lines: base.lines.map(line => {
+      const stored = savedLines.get(line.reservationId) || savedLines.get(line.productId) || {};
+      const priceOverride = stored.priceOverride === true;
+      return {
+        ...line,
+        ...stored,
+        priceOverride,
+        catalogUnitPrice: Number(line.catalogUnitPrice ?? line.unitPrice ?? 0),
+        unitPrice: priceOverride ? Number(stored.unitPrice || 0) : Number(line.unitPrice || 0)
+      };
+    }),
     projectId: base.projectId
   };
 }
@@ -2431,21 +2583,62 @@ function setCalculationSaveStatus(text) {
   ['#calculationSaveStatusTop','#calculationSaveStatusBottom'].forEach(selector=>{const el=$(selector);if(el)el.textContent=text;});
 }
 
-async function saveProjectCalculation() {
-  if (!activeCalculation) return;
-  const calculation = readCalculationForm();
+
+let calculationAutosaveTimer = null;
+let calculationAutosaveRunning = false;
+let calculationAutosaveQueued = false;
+
+function storeCalculationLocally(calculation) {
   const store = readJson(LOCAL_CALCULATIONS_KEY, {});
   store[calculation.projectId] = calculation;
   localStorage.setItem(LOCAL_CALCULATIONS_KEY, JSON.stringify(store));
-  const buttons=[$('#calculationSaveTopBtn'),$('#calculationSaveBottomBtn')].filter(Boolean);
-  buttons.forEach(button=>{button.disabled=true;button.textContent='Wird gespeichert …';});
+}
+
+async function persistCalculationAutomatically(options={}) {
+  if (!activeCalculation) return;
+  if (calculationAutosaveRunning) {
+    calculationAutosaveQueued = true;
+    return;
+  }
+  const calculation = readCalculationForm();
+  storeCalculationLocally(calculation);
+  calculationAutosaveRunning = true;
+  calculationAutosaveQueued = false;
+  setCalculationSaveStatus('Wird automatisch gespeichert …');
   try {
     if (settings().cloudMode) await sendCloudJsonpAction('saveProjectCalculation', calculation, 30000);
-    calculationDirty=false;
-    setCalculationSaveStatus(`Gespeichert um ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`);
-    toast('Buchungsüberblick wurde zwischengespeichert.');
-  } catch(error) { setCalculationSaveStatus('Speichern fehlgeschlagen'); toast('Kalkulation konnte nicht gespeichert werden: '+error.message); }
-  finally { buttons.forEach(button=>{button.disabled=false;button.textContent='Zwischenstand speichern';}); }
+    calculationDirty = false;
+    setCalculationSaveStatus(`Automatisch gespeichert · ${new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`);
+  } catch (error) {
+    calculationDirty = true;
+    setCalculationSaveStatus('Automatisches Speichern fehlgeschlagen');
+    console.warn(error);
+    if (options.notify) toast('Änderungen konnten nicht automatisch gespeichert werden.');
+  } finally {
+    calculationAutosaveRunning = false;
+    if (calculationAutosaveQueued) {
+      calculationAutosaveQueued = false;
+      setTimeout(() => persistCalculationAutomatically(), 150);
+    }
+  }
+}
+
+function scheduleCalculationAutosave() {
+  if (!activeCalculation) return;
+  calculationDirty = true;
+  setCalculationSaveStatus('Änderungen werden automatisch gespeichert …');
+  clearTimeout(calculationAutosaveTimer);
+  calculationAutosaveTimer = setTimeout(() => persistCalculationAutomatically(), 700);
+}
+
+async function flushCalculationAutosave() {
+  clearTimeout(calculationAutosaveTimer);
+  if (!activeCalculation || !calculationDirty) return;
+  await persistCalculationAutomatically({notify:true});
+}
+
+async function saveProjectCalculation() {
+  await persistCalculationAutomatically({notify:true});
 }
 
 function readCalculationForm() {
@@ -2552,11 +2745,75 @@ function isoToday() {
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0,10);
 }
-function addDaysIso(iso, days) {
-  const d = new Date(String(iso || isoToday()) + 'T12:00:00');
-  d.setDate(d.getDate() + Number(days || 0));
-  return d.toISOString().slice(0,10);
+
+let invoiceProfileSaveTimer = null;
+let invoiceProfileSaving = false;
+
+function invoiceProfileFromDialog() {
+  return {
+    invoiceCompany: $('#invoiceCustomerCompany')?.value.trim() || '',
+    invoiceName: $('#invoiceCustomerName')?.value.trim() || '',
+    invoiceStreet: $('#invoiceCustomerStreet')?.value.trim() || '',
+    invoicePostalCode: $('#invoiceCustomerPostalCode')?.value.trim() || '',
+    invoiceCity: $('#invoiceCustomerCity')?.value.trim() || '',
+    invoiceCountry: $('#invoiceCustomerCountry')?.value.trim() || 'Deutschland',
+    invoiceEmail: $('#invoiceCustomerEmail')?.value.trim() || ''
+  };
 }
+
+async function persistInvoiceProfile(options={}) {
+  const projectId = $('#invoiceProjectId')?.value || '';
+  if (!projectId || invoiceProfileSaving) return;
+  const projectIndex = projects.findIndex(item => item.id === projectId);
+  if (projectIndex < 0) return;
+
+  const profile = invoiceProfileFromDialog();
+  const previous = projects[projectIndex];
+  const changed = Object.keys(profile).some(key => String(previous[key] || '') !== String(profile[key] || ''));
+  if (!changed && !options.force) return;
+
+  const updated = normalizeProject({...previous, ...profile});
+  projects[projectIndex] = updated;
+  renderProjects();
+  renderAdminProjects?.();
+
+  if (!settings().cloudMode) return;
+  invoiceProfileSaving = true;
+  try {
+    await sendCloudJsonpAction('saveProject', updated, 30000);
+  } catch (error) {
+    console.warn('Rechnungsprofil konnte nicht automatisch gespeichert werden:', error);
+    if (options.notify) toast('Rechnungsdaten konnten nicht synchronisiert werden.');
+  } finally {
+    invoiceProfileSaving = false;
+  }
+}
+
+function scheduleInvoiceProfileSave() {
+  clearTimeout(invoiceProfileSaveTimer);
+  const status = $('#invoiceProfileSaveStatus');
+  if (status) status.textContent = 'Wird automatisch gespeichert …';
+  invoiceProfileSaveTimer = setTimeout(async () => {
+    await persistInvoiceProfile();
+    if (status) status.textContent = 'Rechnungsdaten automatisch gespeichert';
+  }, 650);
+}
+
+function billingUnitsText(line) {
+  const units = billingUnits(line);
+  const type = String(line.billingType || 'fixed');
+  if (type === 'daily') return `${units} Tag${units === 1 ? '' : 'e'}`;
+  if (type === 'weekly') return `${units} Woche${units === 1 ? '' : 'n'}`;
+  if (type === 'monthly') return `${units} Monat${units === 1 ? '' : 'e'}`;
+  return '1 Fixpreis';
+}
+
+function invoiceBillingLabel(line) {
+  const type = String(line.billingType || 'fixed');
+  if (type === 'fixed') return 'Fixpreis';
+  return `${billingTypeLabel(type)} · ${billingUnitsText(line)}`;
+}
+
 function invoiceTotalsFromCalculation(calculation) {
   const base = calculationTotals(calculation);
   const net = Number(base.net || 0);
@@ -2609,13 +2866,13 @@ async function openInvoiceDialog() {
   if (!project) return toast('Projekt nicht gefunden.');
   activeInvoice = null;
   $('#invoiceProjectId').value = project.id;
-  $('#invoiceCustomerCompany').value = '';
-  $('#invoiceCustomerName').value = project.contact || '';
-  $('#invoiceCustomerStreet').value = '';
-  $('#invoiceCustomerPostalCode').value = '';
-  $('#invoiceCustomerCity').value = '';
-  $('#invoiceCustomerCountry').value = 'Deutschland';
-  $('#invoiceCustomerEmail').value = project.email1 || '';
+  $('#invoiceCustomerCompany').value = project.invoiceCompany || '';
+  $('#invoiceCustomerName').value = project.invoiceName || '';
+  $('#invoiceCustomerStreet').value = project.invoiceStreet || '';
+  $('#invoiceCustomerPostalCode').value = project.invoicePostalCode || '';
+  $('#invoiceCustomerCity').value = project.invoiceCity || '';
+  $('#invoiceCustomerCountry').value = project.invoiceCountry || 'Deutschland';
+  $('#invoiceCustomerEmail').value = project.invoiceEmail || '';
   $('#invoiceReference').value = project.number || '';
   $('#invoiceDate').value = isoToday();
   $('#invoiceDueDate').value = addDaysIso(isoToday(), 14);
@@ -2653,7 +2910,7 @@ function invoicePreviewHtml(payload) {
   const rows = payload.lines.map(line => {
     const units=billingUnits(line);
     const total=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*units*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
-    return `<tr><td>${escapeHtml(line.name||line.productId)}</td><td>${Number(line.quantity||0)}</td><td>${escapeHtml(billingTypeLabel(line.billingType))}</td><td>${euro(line.unitPrice)}</td><td>${line.discount?Math.round(line.discount)+' %':'–'}</td><td class="right">${euro(total)}</td></tr>`;
+    return `<tr><td>${escapeHtml(line.name||line.productId)}</td><td>${Number(line.quantity||0)}</td><td>${escapeHtml(invoiceBillingLabel(line))}</td><td>${euro(line.unitPrice)}</td><td>${line.discount?Math.round(line.discount)+' %':'–'}</td><td class="right">${euro(total)}</td></tr>`;
   }).join('');
   const customer = [payload.customerCompany,payload.customerName,payload.customerStreet,`${payload.customerPostalCode} ${payload.customerCity}`.trim(),payload.customerCountry].filter(Boolean).map(escapeHtml).join('<br>');
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rechnungsvorschau</title><style>*{box-sizing:border-box}body{margin:0;padding:42px;font:13px Arial,sans-serif;color:#171716;max-width:950px;margin:auto}.logo{width:280px;max-height:110px;object-fit:contain;object-position:left center}.top{display:flex;justify-content:space-between;gap:40px;align-items:flex-start}.issuer{font-size:11px;color:#666}.recipient{margin:48px 0 30px;min-height:95px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 26px;margin:20px 0 28px}.meta div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:5px 0}h1{font-size:28px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{font-size:10px;text-transform:uppercase;text-align:left;background:#171716;color:#fff;padding:9px 7px}td{padding:10px 7px;border-bottom:1px solid #ddd}.right{text-align:right}.summary{width:340px;max-width:100%;margin:26px 0 0 auto}.summary div{display:flex;justify-content:space-between;padding:7px 0}.summary .total{font-size:17px;border-top:2px solid #171716}.footer{margin-top:55px;padding-top:14px;border-top:1px solid #bbb;color:#666;font-size:10px;line-height:1.5}.preview{padding:9px 12px;background:#f4f1e8;border-radius:10px;margin-bottom:24px}@media(max-width:650px){body{padding:20px}.top{display:block}.meta{grid-template-columns:1fr}.logo{width:220px}}</style></head><body><div class="preview"><b>VORSCHAU</b> · Die endgültige Rechnungsnummer wird erst beim verbindlichen Erstellen vergeben.</div><div class="top"><div><img class="logo" src="./assets/cocomac-logo.png" alt="Cocomac Essential"><div class="issuer">Cocomac Essential · ein Geschäftsbereich der Cocomac Film GmbH</div></div><div><h1>Rechnung</h1><b>${escapeHtml(project?.name||'')}</b></div></div><div class="recipient">${customer||'<span style="color:#999">Empfängeranschrift fehlt</span>'}</div><div class="meta"><div><span>Rechnungsdatum</span><b>${formatDate(payload.invoiceDate)}</b></div><div><span>Fällig am</span><b>${formatDate(payload.dueDate)}</b></div><div><span>Leistungszeitraum</span><b>${formatDate(payload.serviceFrom)} – ${formatDate(payload.serviceTo)}</b></div><div><span>Referenz</span><b>${escapeHtml(payload.reference||'–')}</b></div></div><table><thead><tr><th>Leistung</th><th>Menge</th><th>Abrechnung</th><th>Einzelpreis</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows}</tbody></table><div class="summary"><div><span>Netto</span><b>${euro(totals.net)}</b></div><div><span>19 % USt.</span><b>${euro(totals.tax)}</b></div><div class="total"><span>Gesamtbetrag</span><b>${euro(totals.gross)}</b></div></div><div class="footer">Cocomac Film GmbH · Gänselieselstraße 29 · 81739 München · Amtsgericht München HRB 302375 · Geschäftsführer Rémi Königswenger<br>Steuernummer 143/125/42170 · USt-IdNr. DE457179561 · Meine Volksbank Raiffeisenbank · IBAN DE45 7116 0000 0007 1767 59</div></body></html>`;
@@ -2672,6 +2929,7 @@ async function createInvoice(event) {
   if (!payload.customerCompany && !payload.customerName) return toast('Bitte Firma oder Namen des Rechnungsempfängers eintragen.');
   const button = $('#invoiceCreateBtn');
   button.disabled = true; setInvoiceStatus('Rechnung wird erstellt …');
+  showActionLoader('Rechnung wird erstellt', 'PDF, Rechnungsnummer und Archiv werden vorbereitet …');
   try {
     const result = await sendCloudJsonpAction('createInvoice', payload, 120000);
     if (!result?.invoice) throw new Error('Das Backend hat keine Rechnung zurückgegeben.');
@@ -2679,6 +2937,8 @@ async function createInvoice(event) {
     toast(`Rechnung ${result.invoice.invoiceNumber} wurde erstellt.`);
   } catch (error) {
     button.disabled = false; setInvoiceStatus(error.message || 'Rechnung konnte nicht erstellt werden.', true); toast(error.message || 'Rechnung konnte nicht erstellt werden.');
+  } finally {
+    hideActionLoader();
   }
 }
 function openCreatedInvoicePdf() {
@@ -2690,12 +2950,13 @@ async function emailCreatedInvoice() {
   const to = $('#invoiceCustomerEmail').value.trim() || activeInvoice.customerEmail || '';
   if (!to) return toast('Bitte eine E-Mail-Adresse des Rechnungsempfängers eintragen.');
   const button=$('#invoiceEmailBtn'); button.disabled=true; setInvoiceStatus('Rechnung wird per E-Mail gesendet …');
+  showActionLoader('Rechnung wird verschickt', `Versand an ${to} wird vorbereitet …`);
   try {
     const result=await sendCloudJsonpAction('emailInvoice',{invoiceNumber:activeInvoice.invoiceNumber,emailTo:to},120000);
     if (result?.invoice) activeInvoice=result.invoice;
     setInvoiceStatus(`Rechnung ${activeInvoice.invoiceNumber} wurde an ${to} gesendet.`); toast('Rechnung wurde versendet.');
   } catch(error) { setInvoiceStatus(error.message || 'Versand fehlgeschlagen.',true); toast(error.message || 'Versand fehlgeschlagen.'); }
-  finally { button.disabled=false; }
+  finally { button.disabled=false; hideActionLoader(); }
 }
 
 async function emailProjectCalculation() {
@@ -2707,6 +2968,7 @@ async function emailProjectCalculation() {
   const requestId = `mail_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   button.disabled = true;
   button.textContent = 'PDF und E-Mail werden erstellt …';
+  showActionLoader('Beleg wird verschickt', 'PDF wird erstellt und die E-Mail vorbereitet …');
   try {
     const result = await sendCloudJsonpAction('emailProjectCalculation', {...calculation, requestId}, 120000);
     if (!result || result.ok === false || result.status !== 'sent') {
@@ -2721,6 +2983,7 @@ async function emailProjectCalculation() {
   } finally {
     button.disabled = false;
     button.textContent = originalLabel;
+    hideActionLoader();
   }
 }
 
@@ -2779,6 +3042,37 @@ function toast(message) {
   element.textContent = message;
   element.classList.remove('hidden');
   setTimeout(() => element.classList.add('hidden'), 4200);
+}
+
+
+// V6.1.3: freie Ausgangsrechnungen der Cocomac Film GmbH
+function bindStandaloneInvoices() {
+  const form=$('#standaloneInvoiceForm'); if(!form) return;
+  $('#newStandaloneInvoiceBtn').onclick=()=>{ form.classList.remove('hidden'); resetStandaloneInvoiceForm(); };
+  $('#siCancelBtn').onclick=()=>form.classList.add('hidden');
+  $('#siAddLineBtn').onclick=()=>addStandaloneLine();
+  $('#siRefreshBtn').onclick=loadStandaloneInvoices;
+  form.onsubmit=submitStandaloneInvoice;
+  form.addEventListener('input',updateStandaloneTotals);
+}
+function resetStandaloneInvoiceForm(){
+  const today=new Date(); const iso=today.toISOString().slice(0,10); const due=new Date(today); due.setDate(due.getDate()+14);
+  $('#standaloneInvoiceForm').reset(); $('#siCountry').value='Deutschland'; $('#siTaxRate').value='19'; $('#siDate').value=iso; $('#siServiceFrom').value=iso; $('#siServiceTo').value=iso; $('#siDueDate').value=due.toISOString().slice(0,10); $('#siLines').innerHTML=''; addStandaloneLine(); updateStandaloneTotals();
+}
+function addStandaloneLine(line={}){
+  const row=document.createElement('div'); row.className='si-line'; row.innerHTML=`<label>Leistung<input class="si-desc" required value="${escapeHtml(line.description||'')}"></label><label>Menge<input class="si-qty" type="number" min="0.01" step="0.01" value="${line.quantity||1}" required></label><label>Einzelpreis netto<input class="si-price" type="number" min="0" step="0.01" value="${line.unitPrice||''}" required></label><button type="button" class="ghost si-remove">Entfernen</button>`; row.querySelector('.si-remove').onclick=()=>{row.remove();updateStandaloneTotals();}; $('#siLines').appendChild(row);
+}
+function standaloneLines(){ return $$('.si-line').map(r=>({description:r.querySelector('.si-desc').value.trim(),quantity:Number(r.querySelector('.si-qty').value||0),unitPrice:Number(r.querySelector('.si-price').value||0),billingType:'fixed',days:1,discount:0,free:false})); }
+function standaloneTotals(){const net=standaloneLines().reduce((s,l)=>s+l.quantity*l.unitPrice,0), rate=Number($('#siTaxRate').value||0), tax=net*rate/100; return {net,tax,gross:net+tax};}
+function updateStandaloneTotals(){const t=standaloneTotals(); $('#siNet').textContent=euro(t.net); $('#siTax').textContent=euro(t.tax); $('#siGross').textContent=euro(t.gross);}
+async function submitStandaloneInvoice(event){
+  event.preventDefault(); if(!confirm('Rechnung jetzt verbindlich erstellen und eine Rechnungsnummer vergeben?')) return;
+  const button=event.submitter; if(button) button.disabled=true;
+  try{const payload=adminPayload({customerCompany:$('#siCompany').value.trim(),customerName:$('#siName').value.trim(),customerStreet:$('#siStreet').value.trim(),customerPostalCode:$('#siPostal').value.trim(),customerCity:$('#siCity').value.trim(),customerCountry:$('#siCountry').value.trim(),customerEmail:$('#siEmail').value.trim(),reference:$('#siReference').value.trim(),projectName:$('#siProjectName').value.trim(),invoiceDate:$('#siDate').value,serviceFrom:$('#siServiceFrom').value,serviceTo:$('#siServiceTo').value,dueDate:$('#siDueDate').value,taxRate:Number($('#siTaxRate').value),note:$('#siNote').value.trim(),lines:standaloneLines()}); const res=await sendCloudJsonpAction('createStandaloneInvoice',payload,60000); toast('Rechnung '+res.invoice.invoiceNumber+' wurde erstellt.'); $('#standaloneInvoiceForm').classList.add('hidden'); await loadStandaloneInvoices(); if(res.invoice.pdfUrl) window.open(res.invoice.pdfUrl,'_blank');}catch(e){toast(e.message||'Rechnung konnte nicht erstellt werden.');}finally{if(button)button.disabled=false;}
+}
+async function loadStandaloneInvoices(){
+  const wrap=$('#standaloneInvoiceArchive'); if(!wrap)return; wrap.innerHTML='<div class="admin-intro">Rechnungen werden geladen …</div>';
+  try{const res=await sendCloudJsonpAction('listStandaloneInvoices',adminPayload()); const items=res.invoices||[]; wrap.innerHTML=items.length?items.map(i=>`<div class="admin-product-row"><div class="admin-project-icon">€</div><div class="admin-product-copy"><b>${escapeHtml(i.invoiceNumber)} · ${escapeHtml(i.projectName||i.reference||'Rechnung')}</b><br><small>${escapeHtml(i.customerCompany||i.customerName||'')} · ${euro(i.gross)} · ${escapeHtml(i.invoiceDate||'')}</small></div><div class="admin-row-actions">${i.pdfUrl?`<button type="button" class="ghost" data-si-pdf="${escapeHtml(i.pdfUrl)}">PDF öffnen</button>`:''}</div></div>`).join(''):'<div class="admin-intro">Noch keine freien Cocomac-Rechnungen erstellt.</div>'; $$('[data-si-pdf]').forEach(b=>b.onclick=()=>window.open(b.dataset.siPdf,'_blank'));}catch(e){wrap.innerHTML='<div class="admin-intro">'+escapeHtml(e.message||'Rechnungen konnten nicht geladen werden.')+'</div>';}
 }
 
 boot().catch(error => {
