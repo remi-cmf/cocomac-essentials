@@ -478,13 +478,10 @@ function openQr(id) {
   if (!item) return toast('Artikel nicht gefunden.');
 
   const productUrl = makeProductUrl(item.id);
-  const qrTargetUrl = item.qrCode
-    ? `${PRODUCT_URL_BASE}?qr=${encodeURIComponent(item.qrCode)}`
-    : productUrl;
   $('#qrTitle').textContent = item.name;
-  $('#qrArticleId').textContent = item.qrCode ? `${item.id} · ${item.qrCode}` : item.id;
-  $('#qrProductLink').textContent = qrTargetUrl;
-  $('#qrProductLink').href = qrTargetUrl;
+  $('#qrArticleId').textContent = item.id;
+  $('#qrProductLink').textContent = productUrl;
+  $('#qrProductLink').href = productUrl;
   $('#qrImageWrap').innerHTML = '';
 
   if (typeof window.QRCode === 'undefined') {
@@ -492,7 +489,7 @@ function openQr(id) {
   }
 
   new window.QRCode($('#qrImageWrap'), {
-    text: qrTargetUrl,
+    text: productUrl,
     width: 420,
     height: 420,
     correctLevel: window.QRCode.CorrectLevel.M
@@ -525,9 +522,7 @@ function downloadQr(item) {
 function printQr(item) {
   const dataUrl = qrDataUrl();
   if (!dataUrl) return toast('QR-Code konnte nicht erstellt werden.');
-  const productUrl = item.qrCode
-    ? `${PRODUCT_URL_BASE}?qr=${encodeURIComponent(item.qrCode)}`
-    : makeProductUrl(item.id);
+  const productUrl = makeProductUrl(item.id);
   const printWindow = window.open('', '_blank', 'width=520,height=700');
   if (!printWindow) return toast('Bitte Pop-ups für das Drucken erlauben.');
 
@@ -1213,6 +1208,7 @@ function openAdminModule(moduleId) {
   $('.admin-module-grid')?.classList.add('hidden');
   if (moduleId === 'inventoryModule') { loadInventoryDraft(); renderInventory(); }
   if (moduleId === 'productsModule') renderAdminProducts();
+  if (moduleId === 'invoicesModule') loadStandaloneInvoices();
   document.getElementById(moduleId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1243,7 +1239,6 @@ function bind() {
   $('#adminAddProductBtn').onclick = openProductDialog;
   $('#scanProductQrBtn').onclick = openProductQrScanner;
   $('#generateQrBatchBtn').onclick = generateQrBatch;
-  if ($('#repairQrDatabaseBtn')) $('#repairQrDatabaseBtn').onclick = repairQrDatabase;
   $('#downloadQrCsvBtn').onclick = downloadFreeQrCsv;
   $('#projectForm').onsubmit = submitProject;
   $('#calculationPreviewBtn').onclick = previewProjectCalculation;
@@ -1253,6 +1248,7 @@ function bind() {
   $('#invoicePreviewBtn').onclick = previewInvoice;
   $('#invoiceOpenPdfBtn').onclick = openCreatedInvoicePdf;
   $('#invoiceEmailBtn').onclick = emailCreatedInvoice;
+  bindStandaloneInvoices();
   ['invoiceCustomerCompany','invoiceCustomerName','invoiceCustomerStreet','invoiceCustomerPostalCode','invoiceCustomerCity','invoiceCustomerCountry','invoiceCustomerEmail'].forEach(id => {
     const el = $('#'+id);
     if (el) el.addEventListener('input', scheduleInvoiceProfileSave);
@@ -2149,47 +2145,11 @@ function renderQrDatabase() {
     const product = productById.get(String(code.productId || ''));
     const assignedText = product ? `${product.name} · ${code.productId}` : (code.productId || 'Noch keinem Produkt zugeordnet');
     const dateText = code.status === 'zugeordnet' && code.assignedAt ? `Zugeordnet: ${formatDate(code.assignedAt)}` : code.createdAt ? `Erzeugt: ${formatDate(code.createdAt)}` : '';
-    return `<div class="admin-product-row qr-database-row"><div class="qr-database-icon">QR</div><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><b>${escapeHtml(assignedText)}</b><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${code.status === 'frei' ? 'Neu / frei' : 'Aktiv vergeben'}${dateText ? ` · ${escapeHtml(dateText)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button>${code.productId ? `<button type="button" class="ghost" data-qr-history="${escapeHtml(code.qrCode)}" data-product-id="${escapeHtml(code.productId)}">Historie</button><button type="button" class="ghost" data-open-qr-product="${escapeHtml(code.productId)}">Produkt öffnen</button>` : ''}</div></div>`;
+    return `<div class="admin-product-row qr-database-row"><div class="qr-database-icon">QR</div><div><div class="qr-code-value">${escapeHtml(code.qrCode)}</div><b>${escapeHtml(assignedText)}</b><small class="${code.status === 'frei' ? 'qr-status-free' : 'qr-status-assigned'}">${code.status === 'frei' ? 'Neu / frei' : 'Aktiv vergeben'}${dateText ? ` · ${escapeHtml(dateText)}` : ''}</small></div><div class="admin-row-actions"><button type="button" class="ghost" data-copy-qr="${escapeHtml(code.qrCode)}">Kopieren</button>${code.productId ? `<button type="button" class="ghost" data-open-qr-product="${escapeHtml(code.productId)}">Produkt öffnen</button>` : ''}</div></div>`;
   }).join('') || '<div class="empty-state">Für diesen Filter wurden keine QR-Codes gefunden.</div>';
   $$('[data-copy-qr]').forEach(button => button.onclick = async () => { await navigator.clipboard.writeText(button.dataset.copyQr); toast('QR-Code kopiert.'); });
   $$('[data-open-qr-product]').forEach(button => button.onclick = () => openProductDialog(button.dataset.openQrProduct));
-  $$('[data-qr-history]').forEach(button => button.onclick = () => openQrHistory(button.dataset.qrHistory, button.dataset.productId));
 }
-
-async function openQrHistory(qrCode, productId) {
-  try {
-    const result = await sendCloudJsonpAction('listQrHistory', adminPayload({ qrCode, productId }));
-    const history = result?.history || {};
-    const product = catalog.find(item => String(item.id) === String(productId));
-    let dialog = $('#qrHistoryDialog');
-    if (!dialog) {
-      dialog = document.createElement('dialog'); dialog.id = 'qrHistoryDialog'; dialog.className = 'dialog'; document.body.appendChild(dialog);
-    }
-    const scans = (history.scans || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.event || 'Scan')}</b><small>${escapeHtml(formatDate(x.timestamp))}${x.context ? ` · ${escapeHtml(x.context)}` : ''}${x.location ? ` · ${escapeHtml(x.location)}` : ''}</small></div></div>`).join('') || '<div class="empty-state">Noch keine Scans protokolliert. Die Aufzeichnung beginnt mit dieser Version.</div>';
-    const projectsHtml = (history.projects || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.projectName || x.projectId)}</b><small>${escapeHtml(formatDate(x.from))} – ${escapeHtml(formatDate(x.to))} · ${escapeHtml(x.status || '')} · ${Number(x.quantity||0)} Stk.</small></div></div>`).join('') || '<div class="empty-state">Keine Projektzuordnungen gefunden.</div>';
-    const movements = (history.movements || []).map(x => `<div class="admin-product-row"><div><b>${escapeHtml(x.action || 'Bewegung')}</b><small>${escapeHtml(formatDate(x.timestamp))}${x.projectId ? ` · ${escapeHtml(x.projectId)}` : ''}${x.location ? ` · ${escapeHtml(x.location)}` : ''}</small></div></div>`).join('') || '<div class="empty-state">Keine Buchungen gefunden.</div>';
-    dialog.innerHTML = `<form method="dialog"><button class="dialog-close" aria-label="Schließen">×</button></form><h2>QR-Historie</h2><p><b>${escapeHtml(qrCode)}</b><br>${escapeHtml(product?.name || productId)} · ${escapeHtml(productId)}</p><h3>Scans (${(history.scans||[]).length})</h3>${scans}<h3>Projekte (${(history.projects||[]).length})</h3>${projectsHtml}<h3>Bewegungen (${(history.movements||[]).length})</h3>${movements}`;
-    dialog.showModal();
-  } catch (error) { toast('Historie konnte nicht geladen werden: ' + error.message); }
-}
-
-async function repairQrDatabase() {
-  if (!(await ensureAdminAccess())) return;
-  const button = $('#repairQrDatabaseBtn');
-  if (button) { button.disabled = true; button.textContent = 'Datenbank wird geprüft …'; }
-  try {
-    const result = await sendCloudJsonpAction('repairQrDatabase', adminPayload({}));
-    qrCodes = Array.isArray(result?.qrCodes) ? result.qrCodes : qrCodes;
-    renderQrDatabase();
-    const migrated = Number(result?.migratedProducts || 0);
-    toast(`QR-Datenbank geprüft: ${Number(result?.total || qrCodes.length)} Codes · ${migrated} bestehende Produkte neu registriert.`);
-  } catch (error) {
-    toast('QR-Datenbank konnte nicht repariert werden: ' + error.message);
-  } finally {
-    if (button) { button.disabled = false; button.textContent = 'QR-Datenbank reparieren'; }
-  }
-}
-
 async function generateQrBatch() {
   if (!(await ensureAdminAccess())) return;
   const count = Math.max(1, Math.min(1000, Math.round(Number($('#qrBatchCount').value || 100))));
@@ -2303,7 +2263,7 @@ async function resolveScannedProductId(value) {
   const qrCode = normalizeQrCode(value);
   if (!qrCode) return String(value || '').toUpperCase();
   if (!settings().cloudMode) return '';
-  const result = await sendCloudJsonpAction('resolveQrCode', { qrCode, context: scanTarget || 'Scan' });
+  const result = await sendCloudJsonpAction('resolveQrCode', { qrCode });
   return String(result?.productId || '').toUpperCase();
 }
 
@@ -2926,6 +2886,12 @@ async function openInvoiceDialog() {
   setInvoiceStatus('');
   renderInvoiceTotals();
   $('#invoiceDialog').showModal();
+  if (settings().cloudMode) {
+    try {
+      const result = await sendCloudJsonpAction('getProjectInvoice', {projectId:project.id}, 30000);
+      if (result?.invoice) applyExistingInvoice(result.invoice);
+    } catch (error) { console.warn('Rechnung konnte nicht geprüft werden:', error); }
+  }
 }
 function applyExistingInvoice(invoice) {
   activeInvoice = invoice;
@@ -2937,45 +2903,33 @@ function applyExistingInvoice(invoice) {
   $('#invoiceEmailBtn').classList.remove('hidden');
   setInvoiceStatus(`Rechnung ${invoice.invoiceNumber} · ${euro(invoice.gross)} brutto`);
 }
-async function previewInvoice() {
-  if (!settings().cloudMode) return toast('Die Rechnungsvorschau benötigt die aktive Google-Sheets-Verbindung.');
+function invoicePreviewHtml(payload) {
+  const project = projects.find(item => item.id === payload.projectId);
+  const calc = {...readCalculationForm(), lines:payload.lines};
+  const totals = invoiceTotalsFromCalculation(calc);
+  const rows = payload.lines.map(line => {
+    const units=billingUnits(line);
+    const total=line.free?0:Number(line.quantity||0)*Number(line.unitPrice||0)*units*(1-Math.min(100,Math.max(0,Number(line.discount||0)))/100);
+    return `<tr><td>${escapeHtml(line.name||line.productId)}</td><td>${Number(line.quantity||0)}</td><td>${escapeHtml(invoiceBillingLabel(line))}</td><td>${euro(line.unitPrice)}</td><td>${line.discount?Math.round(line.discount)+' %':'–'}</td><td class="right">${euro(total)}</td></tr>`;
+  }).join('');
+  const customer = [payload.customerCompany,payload.customerName,payload.customerStreet,`${payload.customerPostalCode} ${payload.customerCity}`.trim(),payload.customerCountry].filter(Boolean).map(escapeHtml).join('<br>');
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rechnungsvorschau</title><style>*{box-sizing:border-box}body{margin:0;padding:42px;font:13px Arial,sans-serif;color:#171716;max-width:950px;margin:auto}.logo{width:280px;max-height:110px;object-fit:contain;object-position:left center}.top{display:flex;justify-content:space-between;gap:40px;align-items:flex-start}.issuer{font-size:11px;color:#666}.recipient{margin:48px 0 30px;min-height:95px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:7px 26px;margin:20px 0 28px}.meta div{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:5px 0}h1{font-size:28px;margin:0 0 8px}table{width:100%;border-collapse:collapse}th{font-size:10px;text-transform:uppercase;text-align:left;background:#171716;color:#fff;padding:9px 7px}td{padding:10px 7px;border-bottom:1px solid #ddd}.right{text-align:right}.summary{width:340px;max-width:100%;margin:26px 0 0 auto}.summary div{display:flex;justify-content:space-between;padding:7px 0}.summary .total{font-size:17px;border-top:2px solid #171716}.footer{margin-top:55px;padding-top:14px;border-top:1px solid #bbb;color:#666;font-size:10px;line-height:1.5}.preview{padding:9px 12px;background:#f4f1e8;border-radius:10px;margin-bottom:24px}@media(max-width:650px){body{padding:20px}.top{display:block}.meta{grid-template-columns:1fr}.logo{width:220px}}</style></head><body><div class="preview"><b>VORSCHAU</b> · Die endgültige Rechnungsnummer wird erst beim verbindlichen Erstellen vergeben.</div><div class="top"><div><img class="logo" src="./assets/cocomac-logo.png" alt="Cocomac Essential"><div class="issuer">Cocomac Essential · ein Geschäftsbereich der Cocomac Film GmbH</div></div><div><h1>Rechnung</h1><b>${escapeHtml(project?.name||'')}</b></div></div><div class="recipient">${customer||'<span style="color:#999">Empfängeranschrift fehlt</span>'}</div><div class="meta"><div><span>Rechnungsdatum</span><b>${formatDate(payload.invoiceDate)}</b></div><div><span>Fällig am</span><b>${formatDate(payload.dueDate)}</b></div><div><span>Leistungszeitraum</span><b>${formatDate(payload.serviceFrom)} – ${formatDate(payload.serviceTo)}</b></div><div><span>Referenz</span><b>${escapeHtml(payload.reference||'–')}</b></div></div><table><thead><tr><th>Leistung</th><th>Menge</th><th>Abrechnung</th><th>Einzelpreis</th><th>Rabatt</th><th>Summe</th></tr></thead><tbody>${rows}</tbody></table><div class="summary"><div><span>Netto</span><b>${euro(totals.net)}</b></div><div><span>19 % USt.</span><b>${euro(totals.tax)}</b></div><div class="total"><span>Gesamtbetrag</span><b>${euro(totals.gross)}</b></div></div><div class="footer">Cocomac Film GmbH · Gänselieselstraße 29 · 81739 München · Amtsgericht München HRB 302375 · Geschäftsführer Rémi Königswenger<br>Steuernummer 143/125/42170 · USt-IdNr. DE457179561 · Meine Volksbank Raiffeisenbank · IBAN DE45 7116 0000 0007 1767 59</div></body></html>`;
+}
+function previewInvoice() {
   const payload = invoiceFormPayload();
-  if (!payload.customerCompany && !payload.customerName) return toast('Bitte Firma oder Namen des Rechnungsempfängers eintragen.');
-
   const popup = window.open('', '_blank');
   if (!popup) return toast('Bitte Pop-ups für die Vorschau erlauben.');
-
-  popup.document.open();
-  popup.document.write('<!doctype html><html><body style="font-family:Arial,sans-serif;padding:40px">Rechnungsvorschau wird geladen …</body></html>');
-  popup.document.close();
-
-  showActionLoader('Rechnungsvorschau wird erstellt', 'Es wird exakt dasselbe Layout wie für das versendete PDF verwendet …');
-  try {
-    const result = await sendCloudJsonpAction('previewInvoice', payload, 60000);
-    if (!result?.html) throw new Error('Das Backend hat keine Vorschau zurückgegeben.');
-    popup.document.open();
-    popup.document.write(result.html);
-    popup.document.close();
-  } catch (error) {
-    try {
-      popup.document.open();
-      popup.document.write('<!doctype html><html><body style="font-family:Arial,sans-serif;padding:40px"><h2>Vorschau konnte nicht erstellt werden</h2><p>' + escapeHtml(error.message || 'Unbekannter Fehler') + '</p></body></html>');
-      popup.document.close();
-    } catch (_) {}
-    toast(error.message || 'Rechnungsvorschau konnte nicht erstellt werden.');
-  } finally {
-    hideActionLoader();
-  }
+  popup.document.open(); popup.document.write(invoicePreviewHtml(payload)); popup.document.close();
 }
 async function createInvoice(event) {
   event.preventDefault();
   if (activeInvoice) return toast('Für dieses Projekt existiert bereits eine Rechnung.');
   if (!settings().cloudMode) return toast('Rechnungen können nur mit aktiver Google-Sheets-Verbindung erstellt werden.');
-  const payload = {...invoiceFormPayload(), requestId:`invoice_${Date.now()}_${Math.random().toString(36).slice(2)}`};
+  const payload = invoiceFormPayload();
   if (!payload.customerCompany && !payload.customerName) return toast('Bitte Firma oder Namen des Rechnungsempfängers eintragen.');
   const button = $('#invoiceCreateBtn');
   button.disabled = true; setInvoiceStatus('Rechnung wird erstellt …');
-  showActionLoader('Rechnung wird erstellt', 'Rechnungsnummer, PDF und Archiv werden vorbereitet …');
+  showActionLoader('Rechnung wird erstellt', 'PDF, Rechnungsnummer und Archiv werden vorbereitet …');
   try {
     const result = await sendCloudJsonpAction('createInvoice', payload, 120000);
     if (!result?.invoice) throw new Error('Das Backend hat keine Rechnung zurückgegeben.');
@@ -2987,31 +2941,9 @@ async function createInvoice(event) {
     hideActionLoader();
   }
 }
-async function openCreatedInvoicePdf() {
-  if (!activeInvoice?.invoiceNumber) return toast('Bitte zuerst die Rechnung verbindlich erstellen.');
-  if (!settings().cloudMode) {
-    if (activeInvoice.pdfUrl) window.open(activeInvoice.pdfUrl, '_blank', 'noopener');
-    return;
-  }
-
-  const popup = window.open('', '_blank');
-  if (!popup) return toast('Bitte Pop-ups für PDF öffnen erlauben.');
-  popup.document.open();
-  popup.document.write('<!doctype html><html><body style="font-family:Arial,sans-serif;padding:40px">Aktuelles Rechnungs-PDF wird vorbereitet …</body></html>');
-  popup.document.close();
-
-  showActionLoader('PDF wird aktualisiert', 'Das aktuelle Rechnungslayout wird erzeugt …');
-  try {
-    const result = await sendCloudJsonpAction('refreshInvoicePdf', {invoiceNumber:activeInvoice.invoiceNumber}, 120000);
-    if (!result?.invoice?.pdfUrl) throw new Error('Es wurde kein aktueller PDF-Link zurückgegeben.');
-    activeInvoice = result.invoice;
-    popup.location.replace(activeInvoice.pdfUrl);
-  } catch (error) {
-    try { popup.close(); } catch (_) {}
-    toast(error.message || 'PDF konnte nicht geöffnet werden.');
-  } finally {
-    hideActionLoader();
-  }
+function openCreatedInvoicePdf() {
+  if (!activeInvoice?.pdfUrl) return toast('Für diese Rechnung ist kein PDF-Link vorhanden.');
+  window.open(activeInvoice.pdfUrl, '_blank', 'noopener');
 }
 async function emailCreatedInvoice() {
   if (!activeInvoice?.invoiceNumber) return toast('Bitte zuerst die Rechnung erstellen.');
@@ -3110,6 +3042,66 @@ function toast(message) {
   element.textContent = message;
   element.classList.remove('hidden');
   setTimeout(() => element.classList.add('hidden'), 4200);
+}
+
+
+// V6.1.4: freie Ausgangsrechnungen mit Netto-/Brutto-Eingabe
+function bindStandaloneInvoices() {
+  const form=$('#standaloneInvoiceForm'); if(!form) return;
+  $('#newStandaloneInvoiceBtn').onclick=()=>{ form.classList.remove('hidden'); resetStandaloneInvoiceForm(); };
+  $('#siCancelBtn').onclick=()=>form.classList.add('hidden');
+  $('#siAddLineBtn').onclick=()=>addStandaloneLine();
+  $('#siRefreshBtn').onclick=loadStandaloneInvoices;
+  form.onsubmit=submitStandaloneInvoice;
+  form.addEventListener('input',updateStandaloneTotals);
+}
+function resetStandaloneInvoiceForm(){
+  const today=new Date(); const iso=today.toISOString().slice(0,10); const due=new Date(today); due.setDate(due.getDate()+14);
+  $('#standaloneInvoiceForm').reset(); $('#siCountry').value='Deutschland'; $('#siTaxRate').value='19'; $('#siDate').value=iso; $('#siServiceFrom').value=iso; $('#siServiceTo').value=iso; $('#siDueDate').value=due.toISOString().slice(0,10); $('#siLines').innerHTML=''; addStandaloneLine(); updateStandaloneTotals();
+}
+function addStandaloneLine(line={}){
+  const row=document.createElement('div');
+  row.className='si-line';
+  const priceMode=line.priceMode||'net';
+  row.innerHTML=`<label>Leistung<input class="si-desc" required value="${escapeHtml(line.description||'')}"></label><label>Menge<input class="si-qty" type="number" min="0.01" step="0.01" value="${line.quantity||1}" required></label><label>Preisart<select class="si-price-mode"><option value="net"${priceMode==='net'?' selected':''}>Netto</option><option value="gross"${priceMode==='gross'?' selected':''}>Brutto</option></select></label><label>Einzelpreis<input class="si-price" type="number" min="0" step="0.01" value="${line.enteredPrice??line.unitPrice??''}" required></label><button type="button" class="ghost si-remove">Entfernen</button>`;
+  row.querySelector('.si-remove').onclick=()=>{row.remove();updateStandaloneTotals();};
+  $('#siLines').appendChild(row);
+}
+function standaloneLines(){
+  const rate=Number($('#siTaxRate').value||0);
+  return $$('.si-line').map(r=>{
+    const quantity=Number(r.querySelector('.si-qty').value||0);
+    const enteredPrice=Number(r.querySelector('.si-price').value||0);
+    const priceMode=r.querySelector('.si-price-mode').value;
+    const unitPrice=priceMode==='gross' ? enteredPrice/(1+rate/100) : enteredPrice;
+    return {description:r.querySelector('.si-desc').value.trim(),quantity,unitPrice,billingType:'fixed',days:1,discount:0,free:false,priceMode,enteredPrice};
+  });
+}
+function standaloneTotals(){
+  const rate=Number($('#siTaxRate').value||0);
+  let net=0, gross=0;
+  standaloneLines().forEach(l=>{
+    if(l.priceMode==='gross'){
+      gross += l.quantity*l.enteredPrice;
+      net += l.quantity*l.enteredPrice/(1+rate/100);
+    }else{
+      net += l.quantity*l.enteredPrice;
+      gross += l.quantity*l.enteredPrice*(1+rate/100);
+    }
+  });
+  net=Math.round(net*100)/100; gross=Math.round(gross*100)/100;
+  const tax=Math.round((gross-net)*100)/100;
+  return {net,tax,gross};
+}
+function updateStandaloneTotals(){const t=standaloneTotals(); $('#siNet').textContent=euro(t.net); $('#siTax').textContent=euro(t.tax); $('#siGross').textContent=euro(t.gross);}
+async function submitStandaloneInvoice(event){
+  event.preventDefault(); if(!confirm('Rechnung jetzt verbindlich erstellen und eine Rechnungsnummer vergeben?')) return;
+  const button=event.submitter; if(button) button.disabled=true;
+  try{const payload=adminPayload({customerCompany:$('#siCompany').value.trim(),customerName:$('#siName').value.trim(),customerStreet:$('#siStreet').value.trim(),customerPostalCode:$('#siPostal').value.trim(),customerCity:$('#siCity').value.trim(),customerCountry:$('#siCountry').value.trim(),customerEmail:$('#siEmail').value.trim(),reference:$('#siReference').value.trim(),projectName:$('#siProjectName').value.trim(),invoiceDate:$('#siDate').value,serviceFrom:$('#siServiceFrom').value,serviceTo:$('#siServiceTo').value,dueDate:$('#siDueDate').value,taxRate:Number($('#siTaxRate').value),note:$('#siNote').value.trim(),lines:standaloneLines()}); const res=await sendCloudJsonpAction('createStandaloneInvoice',payload,60000); toast('Rechnung '+res.invoice.invoiceNumber+' wurde erstellt.'); $('#standaloneInvoiceForm').classList.add('hidden'); await loadStandaloneInvoices(); if(res.invoice.pdfUrl) window.open(res.invoice.pdfUrl,'_blank');}catch(e){toast(e.message||'Rechnung konnte nicht erstellt werden.');}finally{if(button)button.disabled=false;}
+}
+async function loadStandaloneInvoices(){
+  const wrap=$('#standaloneInvoiceArchive'); if(!wrap)return; wrap.innerHTML='<div class="admin-intro">Rechnungen werden geladen …</div>';
+  try{const res=await sendCloudJsonpAction('listStandaloneInvoices',adminPayload()); const items=res.invoices||[]; wrap.innerHTML=items.length?items.map(i=>`<div class="admin-product-row"><div class="admin-project-icon">€</div><div class="admin-product-copy"><b>${escapeHtml(i.invoiceNumber)} · ${escapeHtml(i.projectName||i.reference||'Rechnung')}</b><br><small>${escapeHtml(i.customerCompany||i.customerName||'')} · ${euro(i.gross)} · ${escapeHtml(i.invoiceDate||'')}</small></div><div class="admin-row-actions">${i.pdfUrl?`<button type="button" class="ghost" data-si-pdf="${escapeHtml(i.pdfUrl)}">PDF öffnen</button>`:''}</div></div>`).join(''):'<div class="admin-intro">Noch keine freien Cocomac-Rechnungen erstellt.</div>'; $$('[data-si-pdf]').forEach(b=>b.onclick=()=>window.open(b.dataset.siPdf,'_blank'));}catch(e){wrap.innerHTML='<div class="admin-intro">'+escapeHtml(e.message||'Rechnungen konnten nicht geladen werden.')+'</div>';}
 }
 
 boot().catch(error => {
