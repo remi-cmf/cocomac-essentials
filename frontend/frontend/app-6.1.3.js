@@ -3045,7 +3045,7 @@ function toast(message) {
 }
 
 
-// V6.1.4: freie Ausgangsrechnungen mit Netto-/Brutto-Eingabe
+// V6.1.3: freie Ausgangsrechnungen der Cocomac Film GmbH
 function bindStandaloneInvoices() {
   const form=$('#standaloneInvoiceForm'); if(!form) return;
   $('#newStandaloneInvoiceBtn').onclick=()=>{ form.classList.remove('hidden'); resetStandaloneInvoiceForm(); };
@@ -3060,39 +3060,10 @@ function resetStandaloneInvoiceForm(){
   $('#standaloneInvoiceForm').reset(); $('#siCountry').value='Deutschland'; $('#siTaxRate').value='19'; $('#siDate').value=iso; $('#siServiceFrom').value=iso; $('#siServiceTo').value=iso; $('#siDueDate').value=due.toISOString().slice(0,10); $('#siLines').innerHTML=''; addStandaloneLine(); updateStandaloneTotals();
 }
 function addStandaloneLine(line={}){
-  const row=document.createElement('div');
-  row.className='si-line';
-  const priceMode=line.priceMode||'net';
-  row.innerHTML=`<label>Leistung<input class="si-desc" required value="${escapeHtml(line.description||'')}"></label><label>Menge<input class="si-qty" type="number" min="0.01" step="0.01" value="${line.quantity||1}" required></label><label>Preisart<select class="si-price-mode"><option value="net"${priceMode==='net'?' selected':''}>Netto</option><option value="gross"${priceMode==='gross'?' selected':''}>Brutto</option></select></label><label>Einzelpreis<input class="si-price" type="number" min="0" step="0.01" value="${line.enteredPrice??line.unitPrice??''}" required></label><button type="button" class="ghost si-remove">Entfernen</button>`;
-  row.querySelector('.si-remove').onclick=()=>{row.remove();updateStandaloneTotals();};
-  $('#siLines').appendChild(row);
+  const row=document.createElement('div'); row.className='si-line'; row.innerHTML=`<label>Leistung<input class="si-desc" required value="${escapeHtml(line.description||'')}"></label><label>Menge<input class="si-qty" type="number" min="0.01" step="0.01" value="${line.quantity||1}" required></label><label>Einzelpreis netto<input class="si-price" type="number" min="0" step="0.01" value="${line.unitPrice||''}" required></label><button type="button" class="ghost si-remove">Entfernen</button>`; row.querySelector('.si-remove').onclick=()=>{row.remove();updateStandaloneTotals();}; $('#siLines').appendChild(row);
 }
-function standaloneLines(){
-  const rate=Number($('#siTaxRate').value||0);
-  return $$('.si-line').map(r=>{
-    const quantity=Number(r.querySelector('.si-qty').value||0);
-    const enteredPrice=Number(r.querySelector('.si-price').value||0);
-    const priceMode=r.querySelector('.si-price-mode').value;
-    const unitPrice=priceMode==='gross' ? enteredPrice/(1+rate/100) : enteredPrice;
-    return {description:r.querySelector('.si-desc').value.trim(),quantity,unitPrice,billingType:'fixed',days:1,discount:0,free:false,priceMode,enteredPrice};
-  });
-}
-function standaloneTotals(){
-  const rate=Number($('#siTaxRate').value||0);
-  let net=0, gross=0;
-  standaloneLines().forEach(l=>{
-    if(l.priceMode==='gross'){
-      gross += l.quantity*l.enteredPrice;
-      net += l.quantity*l.enteredPrice/(1+rate/100);
-    }else{
-      net += l.quantity*l.enteredPrice;
-      gross += l.quantity*l.enteredPrice*(1+rate/100);
-    }
-  });
-  net=Math.round(net*100)/100; gross=Math.round(gross*100)/100;
-  const tax=Math.round((gross-net)*100)/100;
-  return {net,tax,gross};
-}
+function standaloneLines(){ return $$('.si-line').map(r=>({description:r.querySelector('.si-desc').value.trim(),quantity:Number(r.querySelector('.si-qty').value||0),unitPrice:Number(r.querySelector('.si-price').value||0),billingType:'fixed',days:1,discount:0,free:false})); }
+function standaloneTotals(){const net=standaloneLines().reduce((s,l)=>s+l.quantity*l.unitPrice,0), rate=Number($('#siTaxRate').value||0), tax=net*rate/100; return {net,tax,gross:net+tax};}
 function updateStandaloneTotals(){const t=standaloneTotals(); $('#siNet').textContent=euro(t.net); $('#siTax').textContent=euro(t.tax); $('#siGross').textContent=euro(t.gross);}
 async function submitStandaloneInvoice(event){
   event.preventDefault(); if(!confirm('Rechnung jetzt verbindlich erstellen und eine Rechnungsnummer vergeben?')) return;

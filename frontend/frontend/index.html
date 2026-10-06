@@ -13,7 +13,7 @@
 
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=596">
+  <link rel="stylesheet" href="./styles.css?v=600">
 </head>
 
 <body>
@@ -110,6 +110,7 @@
         <button type="button" class="admin-module-button" data-admin-module="projectsModule"><span class="admin-module-icon">CME</span><span><b>Projekte verwalten</b><small>Projekte bearbeiten oder löschen</small></span><span class="admin-module-arrow">›</span></button>
         <button type="button" class="admin-module-button" data-admin-module="qrModule"><span class="admin-module-icon">QR</span><span><b>QR-Code-Datenbank</b><small>Etiketten erzeugen und verwalten</small></span><span class="admin-module-arrow">›</span></button>
         <button type="button" class="admin-module-button" data-admin-module="productsModule"><span class="admin-module-icon">+</span><span><b>Produkte verwalten</b><small>Produkte suchen und bearbeiten</small></span><span class="admin-module-arrow">›</span></button>
+        <button type="button" class="admin-module-button" data-admin-module="invoicesModule"><span class="admin-module-icon">€</span><span><b>Cocomac Rechnungen</b><small>Eigene Ausgangsrechnungen erstellen und verwalten</small></span><span class="admin-module-arrow">›</span></button>
       </div>
 
       <section id="inventoryModule" class="admin-section admin-module-panel hidden">
@@ -156,6 +157,23 @@
         </div>
         <label class="qr-database-search">QR-Code durchsuchen<input id="qrDatabaseSearch" type="search" placeholder="QR-Code, Produkt-ID oder Produktname"></label>
         <div id="qrCodeList" class="admin-product-list"></div>
+      </section>
+      <section id="invoicesModule" class="admin-section admin-module-panel hidden">
+        <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
+        <div class="section-heading-inline"><div><h3>Cocomac Rechnungen</h3><p class="field-help">Ausgangsrechnungen der Cocomac Film GmbH unabhängig von Equipment-Buchungen erstellen.</p></div><button id="newStandaloneInvoiceBtn" type="button">+ Neue Rechnung</button></div>
+        <form id="standaloneInvoiceForm" class="standalone-invoice-form hidden">
+          <div class="invoice-form-card"><div class="calculation-section-heading"><div><small>RECHNUNGSEMPFÄNGER</small><h3>Anschrift</h3></div></div>
+            <div class="form-columns"><label>Firma / Organisation<input id="siCompany"></label><label>Ansprechpartner / Name<input id="siName"></label><label>Straße und Hausnummer<input id="siStreet" required></label><label>PLZ<input id="siPostal" required></label><label>Ort<input id="siCity" required></label><label>Land<input id="siCountry" value="Deutschland" required></label><label>E-Mail<input id="siEmail" type="email"></label><label>Referenz / Bestellnummer<input id="siReference"></label></div>
+          </div>
+          <div class="invoice-form-card"><div class="calculation-section-heading"><div><small>RECHNUNGSDATEN</small><h3>Leistung und Zahlungsziel</h3></div></div>
+            <div class="form-columns"><label>Projekt / Betreff<input id="siProjectName" required placeholder="z. B. Produktion Imagefilm"></label><label>Rechnungsdatum<input id="siDate" type="date" required></label><label>Leistungszeitraum von<input id="siServiceFrom" type="date" required></label><label>Leistungszeitraum bis<input id="siServiceTo" type="date" required></label><label>Fällig am<input id="siDueDate" type="date" required></label><label>Umsatzsteuer<select id="siTaxRate"><option value="19">19 %</option><option value="7">7 %</option><option value="0">0 %</option></select></label></div>
+            <label>Hinweis<textarea id="siNote" placeholder="optional"></textarea></label>
+          </div>
+          <div class="invoice-form-card"><div class="calculation-section-heading"><div><small>POSITIONEN</small><h3>Rechnungspositionen</h3></div><button id="siAddLineBtn" type="button" class="ghost">+ Position</button></div><div id="siLines"></div></div>
+          <section class="invoice-preview-summary"><div><span>Netto</span><b id="siNet">0,00 €</b></div><div><span>USt.</span><b id="siTax">0,00 €</b></div><div class="invoice-preview-total"><span>Brutto</span><b id="siGross">0,00 €</b></div></section>
+          <div class="invoice-actions"><button type="button" id="siCancelBtn" class="ghost">Abbrechen</button><button type="submit">Rechnung verbindlich erstellen</button></div>
+        </form>
+        <div class="calculation-section-heading standalone-archive-heading"><div><small>ARCHIV</small><h3>Erstellte Rechnungen</h3></div><button id="siRefreshBtn" type="button" class="ghost">Aktualisieren</button></div><div id="standaloneInvoiceArchive" class="admin-product-list"></div>
       </section>
       <section id="productsModule" class="admin-section admin-module-panel hidden">
         <button type="button" class="admin-module-back ghost" data-admin-module-back>← Zur Übersicht</button>
@@ -412,7 +430,7 @@
     <button type="button" class="close" data-close aria-label="Zurück">←</button>
     <form id="projectForm">
       <input id="projectEditId" type="hidden">
-      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2>
+      <small>COCOMAC ESSENTIAL</small><h2 id="projectDialogTitle">Neues Projekt</h2><p class="field-help">Bei bestehenden Projekten werden Änderungen beim Zurückgehen automatisch gespeichert.</p>
       <div class="form-columns">
         <label>Projektname<input id="projectName" required placeholder="z. B. Martin"></label>
         <label>Projektnummer<div id="projectNumberPreview" class="generated-number">Wird automatisch erzeugt</div></label>
@@ -424,6 +442,19 @@
         <label>Ende<input id="projectEnd" type="date" required></label>
       </div>
       <label>Notiz<textarea id="projectNotes" placeholder="optional"></textarea></label>
+      <details class="project-invoice-details">
+        <summary>Rechnungsdaten der Firma (optional)</summary>
+        <p class="field-help">Diese Daten sind getrennt von Ansprechpartner und Projekt-E-Mails. Sie werden später automatisch für Rechnungen übernommen.</p>
+        <div class="form-columns">
+          <label>Firma / Organisation<input id="projectInvoiceCompany" autocomplete="organization"></label>
+          <label>Rechnungskontakt / Name<input id="projectInvoiceName" autocomplete="name"></label>
+          <label>Straße und Hausnummer<input id="projectInvoiceStreet" autocomplete="street-address"></label>
+          <label>PLZ<input id="projectInvoicePostalCode" autocomplete="postal-code"></label>
+          <label>Ort<input id="projectInvoiceCity" autocomplete="address-level2"></label>
+          <label>Land<input id="projectInvoiceCountry" value="Deutschland" autocomplete="country-name"></label>
+          <label>Rechnungs-E-Mail<input id="projectInvoiceEmail" type="email" autocomplete="email" placeholder="z. B. rechnung@firma.de"></label>
+        </div>
+      </details>
       <button id="projectSubmitBtn" type="submit">Projekt speichern</button>
     </form>
   </dialog>
@@ -538,9 +569,13 @@
       <input id="calculationProjectId" type="hidden">
       <small>COCOMAC ESSENTIAL</small>
       <h2>Buchungsüberblick</h2>
-      <p class="dialog-intro">Passe Preise und Sonderkonditionen nur für dieses Projekt an. Die Stammpreise des Equipments bleiben unverändert.</p>
-      <div class="calculation-save-bar calculation-save-bar-top"><button id="calculationSaveTopBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusTop" class="meta"></span></div>
-      <div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <p class="dialog-intro">Hier passt du Buchungsinformationen, Angebotspreise und Konditionen an und erstellst anschließend Beleg oder Rechnung. Änderungen werden automatisch gespeichert.</p>
+<div id="calculationProjectMeta" class="project-meta-grid"></div>
+      <div class="calculation-autosave-note"><span>Änderungen werden automatisch gespeichert.</span><b id="calculationSaveStatusTop"></b><span id="calculationSaveStatusBottom" class="hidden"></span></div>
+      <section class="invoice-entry-card">
+        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
+        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
+      </section>
       <div class="calculation-bulk-panel">
         <div><small>ALLE POSITIONEN</small><b>Preisart gesammelt festlegen</b><span>Die Auswahl wird auf das gesamte Equipment dieser Buchung angewendet.</span></div>
         <label>Preisart für alle<select id="calculationBulkBillingType">
@@ -561,24 +596,23 @@
       </div>
       <label>Hinweis auf dem Beleg<textarea id="calculationNote" placeholder="z. B. Sonderkonditionen für Nachwuchsprojekt"></textarea></label>
       <div class="calculation-total"><span>Aktuelle Gesamtsumme</span><b id="calculationGrandTotal">0,00 €</b></div>
-      <hr>
-      <h3>E-Mail-Versand</h3>
-      <div class="form-columns">
-        <label>Empfänger<input id="calculationEmailTo" type="text" placeholder="name@example.com"></label>
-        <label>CC<input id="calculationEmailCc" type="text" placeholder="optional"></label>
-        <label>Betreff<input id="calculationEmailSubject" type="text"></label>
-      </div>
-      <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
-      <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
-      <div class="calculation-save-bar"><button id="calculationSaveBottomBtn" type="button">Zwischenstand speichern</button><span id="calculationSaveStatusBottom" class="meta"></span></div>
-      <div class="project-actions calculation-document-actions">
-        <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
-        <button id="calculationEmailBtn" type="button" class="ghost">Beleg per E-Mail senden</button>
-      </div>
-      <section class="invoice-entry-card">
-        <div><small>RECHNUNG</small><h3>Aus Buchung abrechnen</h3><p>Die kalkulierten Positionen werden übernommen. Rechnungsaussteller ist Cocomac Film GmbH, die Rechnung erscheint unter Cocomac Essential.</p></div>
-        <button id="openInvoiceBtn" type="button">Rechnung erstellen</button>
-      </section>
+<details class="email-send-details">
+        <summary><span>E-Mail & Belegversand</span><small>optional</small><b>›</b></summary>
+        <div class="email-send-details-content">
+          <div class="form-columns">
+            <label>Empfänger<input id="calculationEmailTo" type="text" placeholder="name@example.com"></label>
+            <label>CC<input id="calculationEmailCc" type="text" placeholder="optional"></label>
+            <label>Betreff<input id="calculationEmailSubject" type="text"></label>
+          </div>
+          <label>Nachricht<textarea id="calculationEmailBody"></textarea></label>
+          <label class="checkbox-line"><input id="calculationCopySelf" type="checkbox"> Kopie an die im Projekt hinterlegte zweite E-Mail-Adresse</label>
+          <div class="project-actions calculation-document-actions">
+            <button id="calculationPreviewBtn" type="button">Belegvorschau / PDF</button>
+            <button id="calculationEmailBtn" type="button" class="ghost">Beleg per E-Mail senden</button>
+          </div>
+        </div>
+      </details>
+
     </form>
   </dialog>
 
@@ -596,6 +630,7 @@
       <div id="invoiceExistingNotice" class="invoice-existing-notice hidden"></div>
       <section class="invoice-form-card">
         <div class="calculation-section-heading"><div><small>RECHNUNGSEMPFÄNGER</small><h3>Anschrift</h3></div></div>
+        <div class="invoice-profile-save-line"><span>Diese Rechnungsdaten werden automatisch im Projekt gespeichert.</span><b id="invoiceProfileSaveStatus"></b></div>
         <div class="form-columns">
           <label>Firma / Organisation<input id="invoiceCustomerCompany" autocomplete="organization"></label>
           <label>Ansprechpartner / Name<input id="invoiceCustomerName" autocomplete="name"></label>
@@ -638,7 +673,18 @@
     <div id="equipmentCalendarContent"></div>
   </dialog>
 
-  <div id="appVersionBadge" class="app-version-badge">Version 5.9.6</div>
+
+  <div id="actionLoader" class="action-loader hidden" aria-hidden="true" role="status" aria-live="assertive">
+    <div class="action-loader-card">
+      <div class="action-loader-spinner" aria-hidden="true"></div>
+      <div class="action-loader-mark"><span>CME</span></div>
+      <strong id="actionLoaderTitle">Wird verarbeitet …</strong>
+      <p id="actionLoaderDetail">Einen Moment bitte.</p>
+      <div class="action-loader-bar"><span></span></div>
+    </div>
+  </div>
+
+  <div id="appVersionBadge" class="app-version-badge">Version 6.1.4</div>
 
   <div
     id="toast"
@@ -647,6 +693,60 @@
   <section id="printArea" class="print-area" aria-hidden="true"></section>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./app.js?v=596" type="module"></script>
+  
+<script>
+(function () {
+  var startedAt = Date.now();
+
+  function setStartup(percent, text) {
+    var bar = document.getElementById('appSplashProgressBar');
+    var label = document.getElementById('appSplashPercent');
+    var copy = document.getElementById('appSplashText');
+    if (bar) bar.style.width = percent + '%';
+    if (label) label.textContent = percent + ' %';
+    if (copy && text) copy.textContent = text;
+  }
+
+  // Dieser Teil läuft unabhängig von app-6.1.4.js.
+  // Wenn selbst 5 % nicht erscheinen, wurde die neue index.html nicht geladen.
+  setStartup(5, 'App wird gestartet …');
+
+  window.__cmeStartupWatchdog = setTimeout(function () {
+    var splash = document.getElementById('appSplash');
+    if (!splash) return;
+
+    setStartup(100, 'Start fehlgeschlagen');
+
+    var message = document.createElement('div');
+    message.className = 'startup-error-card';
+    message.innerHTML =
+      '<strong>Die App-Datei konnte nicht gestartet werden.</strong>' +
+      '<p>Bitte Seite neu laden. Falls das erneut passiert, liegt es nicht an Google Sheets, sondern am Laden des Frontend-JavaScripts.</p>' +
+      '<button type="button" id="startupReloadBtn">Neu laden</button>';
+    document.body.appendChild(message);
+
+    splash.classList.add('is-finished');
+    setTimeout(function () {
+      if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 450);
+
+    var reload = document.getElementById('startupReloadBtn');
+    if (reload) reload.onclick = function () {
+      var url = new URL(window.location.href);
+      url.searchParams.set('_refresh', Date.now().toString());
+      window.location.replace(url.toString());
+    };
+  }, 15000);
+
+  window.__cmeAppStarted = function () {
+    if (window.__cmeStartupWatchdog) {
+      clearTimeout(window.__cmeStartupWatchdog);
+      window.__cmeStartupWatchdog = null;
+    }
+  };
+})();
+</script>
+
+<script src="./app-6.1.4.js" defer></script>
 </body>
 </html>
